@@ -578,6 +578,118 @@ export const recipeMutationBatchResultSchema = z
   })
   .strict();
 
+
+const recipeCollectionBaseSchema = z
+  .object({
+    id: uuid,
+    kind: z.literal('manual'),
+    name: z.string().trim().min(1).max(120),
+    description: nullableText(2_000).optional().default(null),
+    iconKey: nullableText(120).optional().default(null),
+    coverImagePath: nullableText(1_000).optional().default(null),
+    position: z.number().int().nonnegative(),
+    metadata: jsonObject,
+    recipeIds: z.array(uuid).max(1000),
+  })
+  .strict();
+
+export const recipeEditableCollectionBookSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    collections: z.array(recipeCollectionBaseSchema).max(200),
+  })
+  .strict()
+  .superRefine((book, ctx) => {
+    const ids = new Set<string>();
+    const names = new Set<string>();
+    book.collections.forEach((collection, collectionIndex) => {
+      if (ids.has(collection.id))
+        ctx.addIssue({
+          code: 'custom',
+          path: ['collections', collectionIndex, 'id'],
+          message: 'Duplicate collection id',
+        });
+      ids.add(collection.id);
+
+      const normalizedName = collection.name.trim().toLocaleLowerCase();
+      if (names.has(normalizedName))
+        ctx.addIssue({
+          code: 'custom',
+          path: ['collections', collectionIndex, 'name'],
+          message: 'Collection names must be unique',
+        });
+      names.add(normalizedName);
+
+      const recipeIds = new Set<string>();
+      collection.recipeIds.forEach((recipeId, recipeIndex) => {
+        if (recipeIds.has(recipeId))
+          ctx.addIssue({
+            code: 'custom',
+            path: ['collections', collectionIndex, 'recipeIds', recipeIndex],
+            message: 'Duplicate recipe id in collection',
+          });
+        recipeIds.add(recipeId);
+      });
+    });
+  });
+
+export type RecipeEditableCollectionBook = z.infer<
+  typeof recipeEditableCollectionBookSchema
+>;
+
+const recipeCollectionSchema = recipeCollectionBaseSchema.extend({
+  revision: z.number().int().nonnegative(),
+  deletedAt: isoDateTime.nullable(),
+});
+
+export const recipeCollectionBookSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    revision: z.number().int().nonnegative(),
+    updatedAt: isoDateTime,
+    collections: z.array(recipeCollectionSchema).max(200),
+  })
+  .strict();
+
+export type RecipeCollectionBook = z.infer<typeof recipeCollectionBookSchema>;
+
+export const recipeCollectionMutationSchema = z
+  .object({
+    mutationId: uuid,
+    baseRevision: z.number().int().nonnegative(),
+    document: recipeEditableCollectionBookSchema,
+  })
+  .strict();
+
+export type RecipeCollectionMutation = z.infer<
+  typeof recipeCollectionMutationSchema
+>;
+
+const recipeCollectionAppliedSchema = z
+  .object({
+    status: z.literal('applied'),
+    revision: z.number().int().positive(),
+    document: recipeCollectionBookSchema,
+  })
+  .strict();
+
+const recipeCollectionConflictSchema = z
+  .object({
+    status: z.literal('conflict'),
+    remoteRevision: z.number().int().nonnegative(),
+    remote: recipeCollectionBookSchema,
+  })
+  .strict();
+
+export const recipeCollectionMutationResultSchema = z.discriminatedUnion(
+  'status',
+  [recipeCollectionAppliedSchema, recipeCollectionConflictSchema],
+);
+
+export type RecipeCollectionMutationResult = z.infer<
+  typeof recipeCollectionMutationResultSchema
+>;
+
 export const recipeDeleteAllResultSchema = z
   .object({
     deleted: z.literal(true),
