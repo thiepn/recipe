@@ -77,9 +77,8 @@ The public application API is limited to:
 - `GET /v1/recipe/changes?after=<cursor>&limit=<n>`
 - `GET /v1/recipe/documents/:recipeId`
 - `POST /v1/recipe/mutations`
-- `DELETE /v1/recipe/account-data`
 
-The Gateway passes the verified owner UUID to service-role-only `gateway.recipe_*` RPCs.
+The Gateway passes the verified owner UUID to service-role-only `gateway.recipe_*` RPCs. The destructive `gateway.recipe_delete_all()` primitive is intentionally **not** exposed as a normal browser route; it is reserved for trusted lifecycle orchestration.
 
 ## Sync primitive
 
@@ -337,15 +336,18 @@ Recipe can still use the shared THIEPN Account identity directly.
 
 Account control-plane registration belongs in the later ecosystem/account-integration phase when its grants are enforceable end-to-end.
 
+## Production boundary status
+
+Core Gateway production CORS now includes `https://recipe.thiepn.dev`. The browser still receives no Core service credential and all Recipe data routes remain bearer-authenticated.
+
 ## Privacy/lifecycle release gates
 
 The following are explicit gates rather than hidden assumptions:
 
 1. **OAuth redirect allowlist** — THIEPN Account production Auth must allow `https://recipe.thiepn.dev/auth/callback`.
-2. **Core Gateway origin allowlist** — production Gateway CORS configuration must include `https://recipe.thiepn.dev`.
-3. **Full THIEPN Account deletion** — the Account finalizer currently operates in a different Supabase project and cannot rely on an FK cascade to Recipe Core data. Before general release, Account deletion must invoke/coordinate Recipe deletion server-to-server or otherwise certify equivalent deletion.
-4. **Server media lifecycle** — private original-photo/audio upload/delete policies arrive with the Capture/storage phase.
-5. **Generic Sync Protocol claim** — Recipe follows Sync v1 semantics but does not claim the still-unimplemented generic Core Sync Protocol Phase B.
+2. **Full THIEPN Account deletion** — the Account finalizer currently operates in a different Supabase project and cannot rely on an FK cascade to Recipe Core data. Before general release, Account deletion must invoke/coordinate Recipe deletion server-to-server or otherwise certify equivalent deletion.
+3. **Server media lifecycle** — private original-photo/audio upload/delete policies arrive with the Capture/storage phase.
+4. **Generic Sync Protocol claim** — Recipe follows Sync v1 semantics but does not claim the still-unimplemented generic Core Sync Protocol Phase B.
 
 ## P2 backend verification
 
