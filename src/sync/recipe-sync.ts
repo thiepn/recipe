@@ -249,12 +249,12 @@ export class RecipeSyncEngine {
     const blockedResources = new Set<string>();
 
     for (let mutation of outbox) {
-      if (
-        blockedResources.has(mutation.resourceId) ||
-        mutation.state === 'conflict' ||
-        mutation.state === 'quarantined'
-      )
+      if (blockedResources.has(mutation.resourceId)) continue;
+
+      if (mutation.state === 'conflict' || mutation.state === 'quarantined') {
+        blockedResources.add(mutation.resourceId);
         continue;
+      }
 
       const local = await this.#db.getDocument(
         this.#accountId,
@@ -407,9 +407,14 @@ export class RecipeSyncEngine {
         mutation.resourceId,
       )).filter((row) => row.mutationId !== mutation.mutationId);
 
-      const preserveWorking = later.some(
-        (row) => row.state !== 'quarantined' && row.state !== 'conflict',
-      );
+      const preserveWorking = later.length > 0;
+      const nextSyncState = later.some((row) => row.state === 'conflict')
+        ? 'conflict'
+        : later.some((row) => row.state === 'quarantined')
+          ? 'error'
+          : preserveWorking
+            ? 'pending'
+            : 'synced';
       const latestLocal =
         (await this.#db.getDocument(this.#accountId, mutation.resourceId)) ??
         local;
@@ -422,7 +427,7 @@ export class RecipeSyncEngine {
             : editableFromRemote(remote),
           base: remote,
           serverRevision: result.revision,
-          syncState: preserveWorking ? 'pending' : 'synced',
+          syncState: nextSyncState,
           tombstone: preserveWorking
             ? latestLocal.tombstone
             : remote.recipe.deletedAt !== null,
@@ -445,12 +450,9 @@ export class RecipeSyncEngine {
       if (local && item.revision <= local.serverRevision) continue;
 
       const remote = await this.#api.document(item.id);
-      const dirty = (await this.#db.listResourceOutbox(
-        this.#accountId,
-        item.id,
-      )).some(
-        (row) => row.state !== 'quarantined' && row.state !== 'conflict',
-      );
+      const dirty =
+        local?.syncState === 'conflict' ||
+        (await this.#db.listResourceOutbox(this.#accountId, item.id)).length > 0;
 
       if (local && dirty) {
         documents.push({
@@ -514,12 +516,14 @@ export class RecipeSyncEngine {
         if (local && change.revision <= local.serverRevision) continue;
 
         const remote = await this.#api.document(change.resourceId);
-        const dirty = (await this.#db.listResourceOutbox(
-          this.#accountId,
-          change.resourceId,
-        )).some(
-          (row) => row.state !== 'quarantined' && row.state !== 'conflict',
-        );
+        const dirty =
+          local?.syncState === 'conflict' ||
+          (
+            await this.#db.listResourceOutbox(
+              this.#accountId,
+              change.resourceId,
+            )
+          ).length > 0;
 
         if (local && dirty) {
           documents.push({
