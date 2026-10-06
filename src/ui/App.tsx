@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import {
   BookOpen,
   ChefHat,
@@ -116,7 +116,7 @@ function recipeStyle(title: string) {
   return {
     '--recipe-hue': String(hue),
     '--recipe-hue-2': String((hue + 42) % 360),
-  } as React.CSSProperties;
+  } as CSSProperties;
 }
 
 function durationLabel(minutes: number | null): string {
@@ -138,7 +138,7 @@ function NavButton({
   onClick,
 }: {
   active: boolean;
-  icon: React.ReactNode;
+  icon: ReactNode;
   label: string;
   onClick: () => void;
 }) {
@@ -510,7 +510,7 @@ function RecipeDetail({
             </span>
             <span>
               <LibraryBig size={17} />
-              <strong>{doc.working?.length ?? doc.ingredients.length}</strong>
+              <strong>{doc.ingredients.length}</strong>
               <small>Ingredients</small>
             </span>
           </div>
@@ -599,7 +599,7 @@ function ComingSoon({
   title,
   copy,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   eyebrow: string;
   title: string;
   copy: string;
