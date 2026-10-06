@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import {
   recipeChangesSchema,
+  recipeCollectionBookSchema,
+  recipeCollectionMutationResultSchema,
+  recipeCollectionMutationSchema,
   recipeDocumentSchema,
   recipeManifestSchema,
   recipeMutationBatchInputSchema,
@@ -145,6 +148,26 @@ export class RecipeCoreApi {
       '/v1/recipe/manifest',
       'GET',
       recipeManifestSchema,
+    );
+  }
+
+  collections() {
+    return this.#request(
+      '/v1/recipe/collections',
+      'GET',
+      recipeCollectionBookSchema,
+    );
+  }
+
+  mutateCollections(
+    input: z.input<typeof recipeCollectionMutationSchema>,
+  ) {
+    const mutation = recipeCollectionMutationSchema.parse(input);
+    return this.#request(
+      '/v1/recipe/collections/mutations',
+      'POST',
+      recipeCollectionMutationResultSchema,
+      mutation,
     );
   }
 
