@@ -578,7 +578,6 @@ export const recipeMutationBatchResultSchema = z
   })
   .strict();
 
-
 const recipeCollectionBaseSchema = z
   .object({
     id: uuid,
