@@ -12,3 +12,5 @@ Certification scope:
 - bearer-only Core API behavior.
 
 If green, merge this file as the durable P2 certification record.
+
+Certification rerun: CI bootstrap corrected; validating the latest P2 baseline.
