@@ -1,0 +1,28 @@
+{
+  "app_id": "recipe",
+  "sync_protocol": 1,
+  "status": "recipe-specific-gateway-implementation",
+  "resources": {
+    "recipe_document": {
+      "primitive": "document",
+      "schema_version": 1,
+      "operations": [
+        "create",
+        "update",
+        "delete"
+      ],
+      "conflict_strategy": "strict",
+      "migration_owner": "recipe"
+    }
+  },
+  "capabilities": [
+    "sync",
+    "offline",
+    "conflict_recovery"
+  ],
+  "notes": [
+    "Client clocks never choose winners.",
+    "Source media is deliberately excluded until the private file pipeline is implemented.",
+    "This declaration follows Sync v1 semantics but does not claim generic Core Sync Phase B."
+  ]
+}
