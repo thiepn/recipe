@@ -229,10 +229,10 @@ export class RecipeLocalDb {
   }
 
   async countUnsynced(accountId: string): Promise<number> {
-    const rows = await this.listOutbox(accountId);
-    return rows.filter(
-      (row) => row.state !== 'quarantined',
-    ).length;
+    // Conflict/quarantined mutations still represent unique local work that has
+    // not reached canonical cloud state. They must therefore block ordinary
+    // sign-out just like pending/retry mutations.
+    return (await this.listOutbox(accountId)).length;
   }
 
   async putMutation(mutation: OutboxMutation): Promise<void> {
