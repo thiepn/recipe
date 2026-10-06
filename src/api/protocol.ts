@@ -232,6 +232,123 @@ export const recipeEditableDocumentSchema = z
         message: 'version.recipeId must match recipe.id',
       });
     const versionId = doc.version.id;
+
+    const checkUnique = (
+      name: string,
+      values: Array<string | number>,
+      field: string,
+    ) => {
+      const seen = new Set<string | number>();
+      values.forEach((value, index) => {
+        if (seen.has(value))
+          ctx.addIssue({
+            code: 'custom',
+            path: [name, index, field],
+            message: `Duplicate ${field}`,
+          });
+        seen.add(value);
+      });
+    };
+
+    checkUnique(
+      'ingredientGroups',
+      doc.ingredientGroups.map((row) => row.id),
+      'id',
+    );
+    checkUnique(
+      'ingredientGroups',
+      doc.ingredientGroups.map((row) => row.position),
+      'position',
+    );
+    checkUnique(
+      'ingredients',
+      doc.ingredients.map((row) => row.id),
+      'id',
+    );
+    checkUnique(
+      'ingredients',
+      doc.ingredients.map((row) => row.position),
+      'position',
+    );
+    checkUnique(
+      'steps',
+      doc.steps.map((row) => row.id),
+      'id',
+    );
+    checkUnique(
+      'steps',
+      doc.steps.map((row) => row.position),
+      'position',
+    );
+    checkUnique(
+      'equipment',
+      doc.equipment.map((row) => row.id),
+      'id',
+    );
+    checkUnique(
+      'equipment',
+      doc.equipment.map((row) => row.position),
+      'position',
+    );
+    checkUnique(
+      'stepIngredients',
+      doc.stepIngredients.map(
+        (row) => `${row.stepId}:${row.ingredientId}`,
+      ),
+      'link',
+    );
+    checkUnique(
+      'stepEquipment',
+      doc.stepEquipment.map(
+        (row) => `${row.stepId}:${row.equipmentId}`,
+      ),
+      'link',
+    );
+
+    const groupIds = new Set(doc.ingredientGroups.map((row) => row.id));
+    const ingredientIds = new Set(doc.ingredients.map((row) => row.id));
+    const stepIds = new Set(doc.steps.map((row) => row.id));
+    const equipmentIds = new Set(doc.equipment.map((row) => row.id));
+
+    doc.ingredients.forEach((row, index) => {
+      if (row.groupId !== null && !groupIds.has(row.groupId))
+        ctx.addIssue({
+          code: 'custom',
+          path: ['ingredients', index, 'groupId'],
+          message: 'groupId must reference an ingredient group in this document',
+        });
+    });
+
+    doc.stepIngredients.forEach((row, index) => {
+      if (!stepIds.has(row.stepId))
+        ctx.addIssue({
+          code: 'custom',
+          path: ['stepIngredients', index, 'stepId'],
+          message: 'stepId must reference a step in this document',
+        });
+      if (!ingredientIds.has(row.ingredientId))
+        ctx.addIssue({
+          code: 'custom',
+          path: ['stepIngredients', index, 'ingredientId'],
+          message: 'ingredientId must reference an ingredient in this document',
+        });
+    });
+
+    doc.stepEquipment.forEach((row, index) => {
+      if (!stepIds.has(row.stepId))
+        ctx.addIssue({
+          code: 'custom',
+          path: ['stepEquipment', index, 'stepId'],
+          message: 'stepId must reference a step in this document',
+        });
+      if (!equipmentIds.has(row.equipmentId))
+        ctx.addIssue({
+          code: 'custom',
+          path: ['stepEquipment', index, 'equipmentId'],
+          message: 'equipmentId must reference equipment in this document',
+        });
+    });
+
     for (const [name, rows] of [
       ['ingredientGroups', doc.ingredientGroups],
       ['ingredients', doc.ingredients],
