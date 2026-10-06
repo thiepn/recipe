@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import {
   recipeChangesSchema,
-  recipeDeleteAllResultSchema,
   recipeDocumentSchema,
   recipeManifestSchema,
   recipeMutationBatchInputSchema,
@@ -184,11 +183,4 @@ export class RecipeCoreApi {
     );
   }
 
-  deleteAll() {
-    return this.#request(
-      '/v1/recipe/account-data',
-      'DELETE',
-      recipeDeleteAllResultSchema,
-    );
-  }
 }
