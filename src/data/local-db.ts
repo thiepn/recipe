@@ -1,15 +1,20 @@
 import type {
+  RecipeCollectionBook,
   RecipeDocument,
+  RecipeEditableCollectionBook,
   RecipeEditableDocument,
 } from '../api/protocol.ts';
 
 const DB_NAME = 'thiepn-recipe';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 const STORES = {
   documents: 'documents',
   outbox: 'outbox',
   conflicts: 'conflicts',
+  collectionBook: 'collectionBook',
+  collectionOutbox: 'collectionOutbox',
+  collectionConflicts: 'collectionConflicts',
   meta: 'meta',
 } as const;
 
@@ -64,6 +69,42 @@ export interface ConflictRecord {
   base: RecipeDocument | null;
   local: RecipeEditableDocument | null;
   remote: RecipeDocument | null;
+  createdAt: number;
+}
+
+
+export interface LocalCollectionBookRecord {
+  accountId: string;
+  working: RecipeEditableCollectionBook;
+  base: RecipeCollectionBook | null;
+  serverRevision: number;
+  localRevision: number;
+  syncState: LocalSyncState;
+  updatedAt: number;
+}
+
+export interface CollectionOutboxMutation {
+  mutationId: string;
+  accountId: string;
+  baseRevision: number;
+  document: RecipeEditableCollectionBook;
+  state: OutboxState;
+  attempts: number;
+  createdAt: number;
+  lastAttemptAt: number | null;
+  lastErrorCode: string | null;
+}
+
+export interface CollectionConflictRecord {
+  id: string;
+  accountId: string;
+  mutationId: string | null;
+  reason: string;
+  baseRevision: number;
+  remoteRevision: number;
+  base: RecipeCollectionBook | null;
+  local: RecipeEditableCollectionBook;
+  remote: RecipeCollectionBook;
   createdAt: number;
 }
 
@@ -122,6 +163,26 @@ function openDatabase(indexedDBFactory: IDBFactory): Promise<IDBDatabase> {
         });
         store.createIndex('by-account', 'accountId');
         store.createIndex('by-account-resource', ['accountId', 'resourceId']);
+      }
+
+
+      if (!db.objectStoreNames.contains(STORES.collectionBook)) {
+        db.createObjectStore(STORES.collectionBook, { keyPath: 'accountId' });
+      }
+
+      if (!db.objectStoreNames.contains(STORES.collectionOutbox)) {
+        const store = db.createObjectStore(STORES.collectionOutbox, {
+          keyPath: 'mutationId',
+        });
+        store.createIndex('by-account', 'accountId');
+        store.createIndex('by-account-created', ['accountId', 'createdAt']);
+      }
+
+      if (!db.objectStoreNames.contains(STORES.collectionConflicts)) {
+        const store = db.createObjectStore(STORES.collectionConflicts, {
+          keyPath: 'id',
+        });
+        store.createIndex('by-account', 'accountId');
       }
 
       if (!db.objectStoreNames.contains(STORES.meta)) {
@@ -232,7 +293,11 @@ export class RecipeLocalDb {
     // Conflict/quarantined mutations still represent unique local work that has
     // not reached canonical cloud state. They must therefore block ordinary
     // sign-out just like pending/retry mutations.
-    return (await this.listOutbox(accountId)).length;
+    const [recipes, collections] = await Promise.all([
+      this.listOutbox(accountId),
+      this.listCollectionOutbox(accountId),
+    ]);
+    return recipes.length + collections.length;
   }
 
   async putMutation(mutation: OutboxMutation): Promise<void> {
@@ -296,6 +361,105 @@ export class RecipeLocalDb {
     await transactionDone(tx);
   }
 
+
+  async getCollectionBook(
+    accountId: string,
+  ): Promise<LocalCollectionBookRecord | undefined> {
+    const tx = this.#db.transaction(STORES.collectionBook, 'readonly');
+    return requestResult(
+      tx.objectStore(STORES.collectionBook).get(accountId),
+    ) as Promise<LocalCollectionBookRecord | undefined>;
+  }
+
+  async putCollectionBook(record: LocalCollectionBookRecord): Promise<void> {
+    const tx = this.#db.transaction(STORES.collectionBook, 'readwrite');
+    tx.objectStore(STORES.collectionBook).put(record);
+    await transactionDone(tx);
+  }
+
+  async commitCollectionMutation(
+    record: LocalCollectionBookRecord,
+    mutation: CollectionOutboxMutation,
+  ): Promise<void> {
+    if (record.accountId !== mutation.accountId)
+      throw new Error('Collection mutation ownership mismatch');
+    const tx = this.#db.transaction(
+      [STORES.collectionBook, STORES.collectionOutbox],
+      'readwrite',
+    );
+    tx.objectStore(STORES.collectionBook).put(record);
+    tx.objectStore(STORES.collectionOutbox).put(mutation);
+    await transactionDone(tx);
+  }
+
+  async listCollectionOutbox(
+    accountId: string,
+  ): Promise<CollectionOutboxMutation[]> {
+    const tx = this.#db.transaction(STORES.collectionOutbox, 'readonly');
+    const rows = (await requestResult(
+      tx
+        .objectStore(STORES.collectionOutbox)
+        .index('by-account')
+        .getAll(accountId),
+    )) as CollectionOutboxMutation[];
+    return rows.sort(
+      (a, b) => a.createdAt - b.createdAt || a.mutationId.localeCompare(b.mutationId),
+    );
+  }
+
+  async putCollectionMutation(
+    mutation: CollectionOutboxMutation,
+  ): Promise<void> {
+    const tx = this.#db.transaction(STORES.collectionOutbox, 'readwrite');
+    tx.objectStore(STORES.collectionOutbox).put(mutation);
+    await transactionDone(tx);
+  }
+
+  async applyCollectionMutationSuccess(
+    record: LocalCollectionBookRecord,
+    mutationId: string,
+  ): Promise<void> {
+    const tx = this.#db.transaction(
+      [STORES.collectionBook, STORES.collectionOutbox],
+      'readwrite',
+    );
+    tx.objectStore(STORES.collectionBook).put(record);
+    tx.objectStore(STORES.collectionOutbox).delete(mutationId);
+    await transactionDone(tx);
+  }
+
+  async recordCollectionConflict(
+    record: LocalCollectionBookRecord,
+    mutation: CollectionOutboxMutation,
+    conflict: CollectionConflictRecord,
+  ): Promise<void> {
+    const tx = this.#db.transaction(
+      [
+        STORES.collectionBook,
+        STORES.collectionOutbox,
+        STORES.collectionConflicts,
+      ],
+      'readwrite',
+    );
+    tx.objectStore(STORES.collectionBook).put(record);
+    tx.objectStore(STORES.collectionOutbox).put(mutation);
+    tx.objectStore(STORES.collectionConflicts).put(conflict);
+    await transactionDone(tx);
+  }
+
+  async listCollectionConflicts(
+    accountId: string,
+  ): Promise<CollectionConflictRecord[]> {
+    const tx = this.#db.transaction(STORES.collectionConflicts, 'readonly');
+    const rows = (await requestResult(
+      tx
+        .objectStore(STORES.collectionConflicts)
+        .index('by-account')
+        .getAll(accountId),
+    )) as CollectionConflictRecord[];
+    return rows.sort((a, b) => b.createdAt - a.createdAt);
+  }
+
   async getMeta<T>(accountId: string, key: string): Promise<T | undefined> {
     const tx = this.#db.transaction(STORES.meta, 'readonly');
     const row = (await requestResult(
@@ -342,12 +506,24 @@ export class RecipeLocalDb {
 
   async wipeAccount(accountId: string): Promise<void> {
     const tx = this.#db.transaction(
-      [STORES.documents, STORES.outbox, STORES.conflicts, STORES.meta],
+      [
+        STORES.documents,
+        STORES.outbox,
+        STORES.conflicts,
+        STORES.collectionBook,
+        STORES.collectionOutbox,
+        STORES.collectionConflicts,
+        STORES.meta,
+      ],
       'readwrite',
     );
 
     for (const storeName of Object.values(STORES)) {
       const store = tx.objectStore(storeName);
+      if (storeName === STORES.collectionBook) {
+        store.delete(accountId);
+        continue;
+      }
       const index = store.index('by-account');
       const keys = await requestResult(index.getAllKeys(accountId));
       for (const key of keys) store.delete(key);
