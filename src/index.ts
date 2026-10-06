@@ -4,4 +4,7 @@ export * from './auth/account.ts';
 export * from './data/local-db.ts';
 export * from './media/cache.ts';
 export * from './sync/recipe-sync.ts';
-export * from './sync/collection-sync.ts';\nexport * from './library/model.ts';\nexport * from './library/create.ts';\nexport * from './library/collections.ts';\n
+export * from './sync/collection-sync.ts';
+export * from './library/model.ts';
+export * from './library/create.ts';
+export * from './library/collections.ts';
