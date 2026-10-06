@@ -78,9 +78,21 @@ function mutationPayload(mutation: OutboxMutation): RecipeMutation {
   };
 }
 
-function isRetryable(error: unknown): boolean {
-  if (!(error instanceof RecipeApiError)) return true;
-  return error.status === 0 || error.status >= 500;
+function failureDisposition(
+  error: unknown,
+): { state: 'retry' | 'quarantined'; stopCycle: boolean } {
+  if (!(error instanceof RecipeApiError))
+    return { state: 'retry', stopCycle: true };
+
+  if (
+    error.status === 0 ||
+    error.status === 401 ||
+    error.status === 403 ||
+    error.status >= 500
+  )
+    return { state: 'retry', stopCycle: true };
+
+  return { state: 'quarantined', stopCycle: false };
 }
 
 export class RecipeSyncEngine {
@@ -234,9 +246,14 @@ export class RecipeSyncEngine {
 
   async #pushPending(): Promise<boolean> {
     const outbox = await this.#db.listOutbox(this.#accountId);
+    const blockedResources = new Set<string>();
 
     for (let mutation of outbox) {
-      if (mutation.state === 'conflict' || mutation.state === 'quarantined')
+      if (
+        blockedResources.has(mutation.resourceId) ||
+        mutation.state === 'conflict' ||
+        mutation.state === 'quarantined'
+      )
         continue;
 
       const local = await this.#db.getDocument(
@@ -250,6 +267,12 @@ export class RecipeSyncEngine {
           lastErrorCode: 'LOCAL_DOCUMENT_MISSING',
         };
         await this.#db.putMutation(mutation);
+        blockedResources.add(mutation.resourceId);
+        continue;
+      }
+
+      if (local.syncState === 'conflict') {
+        blockedResources.add(mutation.resourceId);
         continue;
       }
 
@@ -282,10 +305,10 @@ export class RecipeSyncEngine {
         if (!first) throw new Error('Gateway returned no mutation result');
         result = first;
       } catch (error) {
-        const retryable = isRetryable(error);
+        const disposition = failureDisposition(error);
         await this.#db.putMutation({
           ...inFlight,
-          state: retryable ? 'retry' : 'quarantined',
+          state: disposition.state,
           lastErrorCode:
             error instanceof RecipeApiError ? error.code : 'SYNC_ERROR',
         });
@@ -296,9 +319,12 @@ export class RecipeSyncEngine {
           updatedAt: this.#now(),
         });
 
-        // Network/auth/server availability failures make a pull unsafe because
-        // the client does not know whether this mutation committed.
-        if (retryable || error instanceof RecipeApiError) return false;
+        if (disposition.stopCycle) return false;
+
+        // A malformed/non-retryable mutation is isolated so it cannot poison
+        // unrelated recipes. Later dependent mutations for the same recipe
+        // stay blocked until the bad mutation is repaired.
+        blockedResources.add(mutation.resourceId);
         continue;
       }
 
@@ -327,6 +353,7 @@ export class RecipeSyncEngine {
           { ...inFlight, state: 'conflict' },
           conflict,
         );
+        blockedResources.add(mutation.resourceId);
         continue;
       }
 
@@ -353,6 +380,7 @@ export class RecipeSyncEngine {
           { ...inFlight, state: 'conflict' },
           conflict,
         );
+        blockedResources.add(mutation.resourceId);
         continue;
       }
 
