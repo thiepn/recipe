@@ -14,11 +14,17 @@
     "exactOptionalPropertyTypes": true,
     "noUncheckedIndexedAccess": true,
     "forceConsistentCasingInFileNames": true,
-    "allowImportingTsExtensions": true
+    "allowImportingTsExtensions": true,
+    "jsx": "react-jsx",
+    "types": [
+      "vite/client"
+    ]
   },
   "include": [
     "src/**/*.ts",
+    "src/**/*.tsx",
     "contracts/**/*.ts",
-    "tests/**/*.ts"
+    "tests/**/*.ts",
+    "tests/**/*.tsx"
   ]
 }
