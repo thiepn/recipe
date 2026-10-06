@@ -29,6 +29,18 @@ export class UnsyncedChangesError extends Error {
   }
 }
 
+function safeReturnTo(value: string | undefined): string {
+  if (!value || !value.startsWith('/') || value.startsWith('//')) return '/';
+  try {
+    const base = 'https://recipe-return.invalid';
+    const parsed = new URL(value, base);
+    if (parsed.origin !== base) return '/';
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return '/';
+  }
+}
+
 function exactOrigin(value: string): string {
   const url = new URL(value);
   if (
@@ -71,10 +83,7 @@ export async function signInWithGoogle(
   const origin = exactOrigin(
     options.appOrigin ?? globalThis.location?.origin ?? 'https://recipe.thiepn.dev',
   );
-  const returnTo =
-    options.returnTo && options.returnTo.startsWith('/')
-      ? options.returnTo
-      : '/';
+  const returnTo = safeReturnTo(options.returnTo);
 
   if (globalThis.sessionStorage)
     globalThis.sessionStorage.setItem(RETURN_KEY, returnTo);
@@ -108,7 +117,7 @@ export async function handleRecipeAuthCallback(
 
   return {
     identity,
-    returnTo: stored?.startsWith('/') ? stored : '/',
+    returnTo: safeReturnTo(stored ?? undefined),
   };
 }
 
