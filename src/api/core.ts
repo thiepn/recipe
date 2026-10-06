@@ -21,15 +21,13 @@ const failureSchema = z
   })
   .strict();
 
-function successSchema<T extends z.ZodType>(schema: T) {
-  return z
-    .object({
-      ok: z.literal(true),
-      data: schema,
-      meta: z.object({ requestId: z.string().min(1) }).strict(),
-    })
-    .strict();
-}
+const successEnvelopeSchema = z
+  .object({
+    ok: z.literal(true),
+    data: z.unknown(),
+    meta: z.object({ requestId: z.string().min(1) }).strict(),
+  })
+  .strict();
 
 export class RecipeApiError extends Error {
   constructor(
@@ -138,7 +136,8 @@ export class RecipeCoreApi {
       );
     }
 
-    return successSchema(schema).parse(payload).data;
+    const envelope = successEnvelopeSchema.parse(payload);
+    return schema.parse(envelope.data);
   }
 
   manifest() {
