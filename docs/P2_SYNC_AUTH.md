@@ -407,6 +407,17 @@ Final live Core security verification:
 
 The earlier exploratory certification PRs were closed as superseded after the final baseline passed.
 
+## Final re-certification
+
+After the last CI-bootstrap cleanup, the current P2 heads were certified once more:
+
+- Recipe `Recipe CI` run **19**: success;
+- Recipe final-certification PR #3: merged as `9b9256e643240ab90579e2528c2f02230cde3cbc`;
+- Core `Core CI` run **354**: success;
+- Core final-certification PR #27: merged as `e8fed398e4525b58c27d20ee21d5e9a04d877561`.
+
+This re-certification ran against the fully hardened P2 baseline and supersedes the earlier exploratory certification PRs.
+
 ## Next
 
 **P3 — Recipe Library, Search, Collections & Visual Product Shell**
