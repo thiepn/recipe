@@ -14,3 +14,5 @@ Certification scope:
 If green, merge this file as the durable P2 certification record.
 
 Certification rerun: CI bootstrap corrected; validating the latest P2 baseline.
+
+Final certification rerun: latest hardened P2 baseline.
