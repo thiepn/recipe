@@ -65,7 +65,7 @@ P2 adds:
 - conflict preservation instead of last-write-wins;
 - owner-scoped offline media cache;
 - sign-out protection while unsynced changes remain;
-- an owner-scoped Recipe delete-all backend.
+- a service-role-only owner-scoped Recipe cleanup primitive for trusted lifecycle orchestration.
 
 See `docs/P2_SYNC_AUTH.md`.
 
@@ -102,4 +102,7 @@ supabase/
 ## Next
 
 **P3 — Recipe Library, Search, Collections & Visual Product Shell**
-\n## P2 production gates\n\nBefore public release, THIEPN Account must allow the Recipe OAuth callback, Core Gateway CORS must allow `https://recipe.thiepn.dev`, full THIEPN Account deletion must coordinate Recipe deletion across the separate Core project, and private source-media upload/deletion must be certified in the Capture phase.\n
+
+## P2 production gates
+
+Before public release, THIEPN Account must allow the Recipe OAuth callback, full THIEPN Account deletion must coordinate Recipe deletion across the separate Core project, and private source-media upload/deletion must be certified in the Capture phase. Core Gateway production CORS already allows `https://recipe.thiepn.dev`.
