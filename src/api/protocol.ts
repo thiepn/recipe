@@ -695,5 +695,8 @@ export const recipeDeleteAllResultSchema = z
     recipes: z.number().int().nonnegative(),
     mutationReceipts: z.number().int().nonnegative(),
     changeRecords: z.number().int().nonnegative(),
+    collections: z.number().int().nonnegative(),
+    collectionMutationReceipts: z.number().int().nonnegative(),
+    collectionBooks: z.number().int().nonnegative(),
   })
   .strict();
