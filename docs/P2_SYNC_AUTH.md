@@ -365,6 +365,48 @@ Verified:
 - whole-owner Recipe cleanup;
 - no synthetic test rows left behind.
 
+## P2 certification — complete
+
+Final certification was performed from branches created from the fully hardened P2 `main` baselines.
+
+Recipe certification:
+
+- `Recipe CI` run **15**: success;
+- strict TypeScript: pass;
+- P2 Vitest durability/sync/conflict tests: pass;
+- final certification PR #2: merged;
+- certification merge: `be927dee31877d44875b72faaaabf00ce1cba011`.
+
+Core certification:
+
+- `Core CI` run **352**: success;
+- Prettier: pass;
+- ESLint: pass;
+- strict TypeScript: pass;
+- Vitest including private Recipe Gateway regression coverage: pass;
+- Git ↔ SQL registry drift validation: pass;
+- credential scan: pass;
+- Gateway Worker build: pass;
+- local Supabase reset: pass;
+- database lint: pass;
+- pgTAP: pass;
+- authenticated local HTTP smoke tests: pass;
+- final certification PR #26: merged;
+- certification merge: `6d21c3a68d9e6dbfa358ae4d33db9d725ea9b292`.
+
+Final live Core security verification:
+
+- 13/13 Recipe tables have RLS enabled;
+- 0 Recipe foreign keys point at Core's unrelated `auth.users`;
+- 0 `anon` / `authenticated` Recipe table grants;
+- browser-role deny policies cover all 13 Recipe tables;
+- all six Recipe Gateway/database RPC functions are `SECURITY INVOKER` and executable only by `service_role`;
+- malformed relational payloads are normalized to `RECIPE_BAD_REQUEST`;
+- Supabase Security Advisor: **0 Recipe-specific findings**;
+- Performance Advisor: only expected unused-index INFO notices on the new workload.
+
+The earlier exploratory certification PRs were closed as superseded after the final baseline passed.
+
 ## Next
 
 **P3 — Recipe Library, Search, Collections & Visual Product Shell**
