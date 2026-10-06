@@ -17,8 +17,10 @@ It is not a public recipe feed or generic CRUD cookbook. Each account owns an is
 - **Product namespace:** `recipe`
 - **Backend level:** `5`
 - **Default visibility:** `private`
-- **Ownership:** canonical authenticated user UUID; clients never choose another user's owner ID
-- **Database security:** PostgreSQL RLS on every Recipe table
+- **Ownership:** canonical THIEPN Account UUID verified by the Core Gateway
+- **Cloud data path:** Recipe client → Core Gateway → private Recipe schema
+- **Local persistence:** IndexedDB + owner-scoped media Cache Storage
+- **Database security:** no direct `anon`/`authenticated` Recipe table access; RLS remains defense in depth
 - **Public URL:** `recipe.thiepn.dev`
 
 The private `recipe` schema is not intended to be used as an unstructured public REST surface. Later phases add narrow typed product APIs/RPCs while RLS remains defense in depth.
@@ -46,7 +48,26 @@ Live migrations:
 - `20261006082742_recipe_p1_domain_foundation.sql`
 - `20261006082826_recipe_p1_fk_index_hardening.sql`
 
-Supabase security advisors report no Recipe-specific findings after P1. Performance advisor FK coverage is clean; new indexes naturally report as unused until application traffic exists.
+Supabase security advisors reported no Recipe-specific findings after P1. Performance advisor FK coverage was clean; new indexes naturally report as unused until application traffic exists.
+
+> **P2 correction:** P1 initially referenced THIEPN Core's local `auth.users`. P2 verified that THIEPN Account and Core are separate Auth tenants, removed those foreign keys, and moved Recipe to the existing verified Gateway identity boundary.
+
+## P2 — complete
+
+P2 adds:
+
+- Google OAuth / PKCE through THIEPN Account;
+- Gateway-only Core access;
+- strict recipe-document compare-and-swap revisions;
+- idempotent mutation receipts and a monotonic change cursor;
+- tombstone deletes;
+- IndexedDB documents/outbox/conflicts/meta;
+- conflict preservation instead of last-write-wins;
+- owner-scoped offline media cache;
+- sign-out protection while unsynced changes remain;
+- an owner-scoped Recipe delete-all backend.
+
+See `docs/P2_SYNC_AUTH.md`.
 
 ## Product constraints
 
@@ -65,6 +86,14 @@ contracts/
 
 docs/
   P1_DOMAIN_MODEL.md
+  P2_SYNC_AUTH.md
+
+src/
+  api/
+  auth/
+  data/
+  media/
+  sync/
 
 supabase/
   migrations/
@@ -72,4 +101,5 @@ supabase/
 
 ## Next
 
-**P2 — Authentication Boundary, Local/Offline Data Architecture, Sync Contract & Privacy Hardening**
+**P3 — Recipe Library, Search, Collections & Visual Product Shell**
+\n## P2 production gates\n\nBefore public release, THIEPN Account must allow the Recipe OAuth callback, Core Gateway CORS must allow `https://recipe.thiepn.dev`, full THIEPN Account deletion must coordinate Recipe deletion across the separate Core project, and private source-media upload/deletion must be certified in the Capture phase.\n
