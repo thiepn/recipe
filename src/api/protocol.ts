@@ -80,11 +80,41 @@ const editableRecipeVersionSchema = z
     servings: z.number().positive().nullable().optional().default(null),
     servingUnit: nullableText(120).optional().default(null),
     difficulty: recipeDifficultySchema,
-    prepMinutes: z.number().int().nonnegative().nullable().optional().default(null),
-    activeMinutes: z.number().int().nonnegative().nullable().optional().default(null),
-    passiveMinutes: z.number().int().nonnegative().nullable().optional().default(null),
-    restMinutes: z.number().int().nonnegative().nullable().optional().default(null),
-    totalMinutes: z.number().int().nonnegative().nullable().optional().default(null),
+    prepMinutes: z
+      .number()
+      .int()
+      .nonnegative()
+      .nullable()
+      .optional()
+      .default(null),
+    activeMinutes: z
+      .number()
+      .int()
+      .nonnegative()
+      .nullable()
+      .optional()
+      .default(null),
+    passiveMinutes: z
+      .number()
+      .int()
+      .nonnegative()
+      .nullable()
+      .optional()
+      .default(null),
+    restMinutes: z
+      .number()
+      .int()
+      .nonnegative()
+      .nullable()
+      .optional()
+      .default(null),
+    totalMinutes: z
+      .number()
+      .int()
+      .nonnegative()
+      .nullable()
+      .optional()
+      .default(null),
     cuisineTags: z.array(z.string().trim().min(1).max(120)).max(40),
     categoryTags: z.array(z.string().trim().min(1).max(120)).max(40),
     dietaryTags: z.array(z.string().trim().min(1).max(120)).max(40),
@@ -292,16 +322,12 @@ export const recipeEditableDocumentSchema = z
     );
     checkUnique(
       'stepIngredients',
-      doc.stepIngredients.map(
-        (row) => `${row.stepId}:${row.ingredientId}`,
-      ),
+      doc.stepIngredients.map((row) => `${row.stepId}:${row.ingredientId}`),
       'link',
     );
     checkUnique(
       'stepEquipment',
-      doc.stepEquipment.map(
-        (row) => `${row.stepId}:${row.equipmentId}`,
-      ),
+      doc.stepEquipment.map((row) => `${row.stepId}:${row.equipmentId}`),
       'link',
     );
 
@@ -315,7 +341,8 @@ export const recipeEditableDocumentSchema = z
         ctx.addIssue({
           code: 'custom',
           path: ['ingredients', index, 'groupId'],
-          message: 'groupId must reference an ingredient group in this document',
+          message:
+            'groupId must reference an ingredient group in this document',
         });
     });
 
@@ -493,7 +520,10 @@ export const recipeMutationSchema = z
         path: ['document'],
         message: 'document is required for create/replace',
       });
-    if (mutation.document && mutation.document.recipe.id !== mutation.resourceId)
+    if (
+      mutation.document &&
+      mutation.document.recipe.id !== mutation.resourceId
+    )
       ctx.addIssue({
         code: 'custom',
         path: ['resourceId'],
