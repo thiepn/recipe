@@ -99,16 +99,18 @@ export class RecipeCoreApi {
     };
     if (body !== undefined) headers['Content-Type'] = 'application/json';
 
+    const init: RequestInit = {
+      method,
+      headers,
+      signal: AbortSignal.timeout(this.#timeoutMs),
+      credentials: 'omit',
+      redirect: 'error',
+    };
+    if (body !== undefined) init.body = JSON.stringify(body);
+
     let response: Response;
     try {
-      response = await this.#fetch(new URL(path, this.#base), {
-        method,
-        headers,
-        body: body === undefined ? undefined : JSON.stringify(body),
-        signal: AbortSignal.timeout(this.#timeoutMs),
-        credentials: 'omit',
-        redirect: 'error',
-      });
+      response = await this.#fetch(new URL(path, this.#base), init);
     } catch (error) {
       throw new RecipeApiError(
         'NETWORK_ERROR',
