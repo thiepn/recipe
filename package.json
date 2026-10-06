@@ -6,7 +6,8 @@
   "packageManager": "pnpm@11.19.0",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "verify": "pnpm typecheck && pnpm test"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.117.2",
@@ -14,6 +15,10 @@
   },
   "devDependencies": {
     "typescript": "7.0.2",
-    "vitest": "5.0.2"
+    "vitest": "5.0.2",
+    "fake-indexeddb": "6.2.4"
+  },
+  "engines": {
+    "node": ">=24.0.0 <25"
   }
 }
