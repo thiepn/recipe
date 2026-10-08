@@ -170,7 +170,7 @@ export function ImportSheet({ open, initialMode, onClose, onSave }: Props) {
   };
 
   return (
-    <div className="modal-layer" role="presentation" onMouseDown={onClose}>
+    <div className="modal-layer" role="presentation" onMouseDown={() => { if (!busy) onClose(); }}>
       <section
         className="sheet import-sheet"
         role="dialog"
