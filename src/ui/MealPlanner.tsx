@@ -16,6 +16,7 @@ interface Props {
   accountId: string;
   pantry: PantryDocument;
   onCook: (record: LocalRecipeRecord) => void;
+  onEdit: (record: LocalRecipeRecord) => void;
 }
 
 function longDay(value: string): string {
@@ -31,7 +32,7 @@ function slotLabel(slot:MealSlot):string {
   return slot==='breakfast'?'Breakfast':slot==='lunch'?'Lunch':slot==='dinner'?'Dinner':'Snack';
 }
 
-export function MealPlanner({records,db,accountId,pantry,onCook}:Props) {
+export function MealPlanner({records,db,accountId,pantry,onCook,onEdit}:Props) {
   const store=useMemo(()=>new MealPlannerStore(db,accountId),[db,accountId]);
   const [plan,setPlan]=useState<MealPlannerState|null>(null);
   const planRef=useRef<MealPlannerState|null>(null);
@@ -162,8 +163,9 @@ export function MealPlanner({records,db,accountId,pantry,onCook}:Props) {
                       {savedRecipes.map(item=>
                         <option key={item.resourceId} value={item.resourceId}>{item.working.version.title}</option>)}
                     </select>
-                    {record&&<button type="button" title="Start cooking" aria-label={`Cook ${record.working.version.title}`}
-                      onClick={()=>onCook(record)}><ChefHat size={17}/></button>}
+                    {record&&<button type="button" title={record.working.steps.length>0?'Start cooking':'Add cooking steps'}
+                      aria-label={record.working.steps.length>0?`Cook ${record.working.version.title}`:`Edit ${record.working.version.title} to add steps`}
+                      onClick={()=>record.working.steps.length>0?onCook(record):onEdit(record)}><ChefHat size={17}/></button>}
                   </div>
                   {record&&<div className="planner-meal-details">
                     <span>{record.working.version.totalMinutes===null?'Time not set':`${record.working.version.totalMinutes} min`}</span>
