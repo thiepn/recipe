@@ -140,6 +140,21 @@ export async function getVerifiedRecipeIdentity(
 }
 
 /**
+ * Distinguish a genuinely signed-out browser from a temporary Account outage.
+ * Never interpret a failed verification of a cached session as sign-out:
+ * otherwise users are sent through OAuth again while their token remains stored.
+ * getUser() remains the authority for identifying the Account owner.
+ */
+export async function getStartupRecipeIdentity(
+  client: SupabaseClient,
+): Promise<VerifiedRecipeIdentity | null> {
+  const { data, error } = await client.auth.getSession();
+  if (error) throw error;
+  if (!data.session) return null;
+  return getVerifiedRecipeIdentity(client);
+}
+
+/**
  * getSession() is used only to retrieve the current bearer token for the Core
  * Gateway. Authorization is performed by the Gateway, which verifies the token
  * against THIEPN Account /auth/v1/user.
