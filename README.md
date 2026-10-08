@@ -107,9 +107,13 @@ The initial recipe library, text search, favorites and collections are implement
 
 The P4 search-first redesign consolidates the Recipes page into the single root cookbook, removes the separate homepage and overview stat cards, and upgrades responsive search/filter layout. See `docs/P4_SEARCH_FIRST_COOKBOOK.md`.
 
+## P5 — implemented and CI-verified
+
+The cookbook now includes an account-scoped, device-local ingredient selector, conservative English/German ingredient normalization, required/optional ingredient coverage, exact missing-item names, ranked recipe results, and filters for zero/one/two missing ingredient types. Quantities are **not** checked, so matching never claims a recipe is cookable with available amounts. See `docs/P5_INGREDIENT_INTELLIGENCE.md`.
+
 ## Next
 
-**P5 — Ingredient Intelligence:** inventory-aware matching and exact missing-ingredient counts; followed by P6 authenticated imports, P7 ChatGPT write actions and P8 optional Luna capabilities.
+**P6 — Authenticated Recipe Import Pipeline:** URL/text/photo capture with provenance, reviewable drafts, and deduplication. P7 adds ChatGPT write actions; P8 optional GPT-6 Luna capabilities.
 
 ## P2 production gates
 
