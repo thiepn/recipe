@@ -17,6 +17,7 @@ interface Props {
   pantry: PantryDocument;
   onCook: (record: LocalRecipeRecord) => void;
   onEdit: (record: LocalRecipeRecord) => void;
+  onAdd: () => void;
 }
 
 function longDay(value: string): string {
@@ -32,7 +33,7 @@ function slotLabel(slot:MealSlot):string {
   return slot==='breakfast'?'Breakfast':slot==='lunch'?'Lunch':slot==='dinner'?'Dinner':'Snack';
 }
 
-export function MealPlanner({records,db,accountId,pantry,onCook,onEdit}:Props) {
+export function MealPlanner({records,db,accountId,pantry,onCook,onEdit,onAdd}:Props) {
   const store=useMemo(()=>mealPlannerStoreFor(db,accountId),[db,accountId]);
   const [plan,setPlan]=useState<MealPlannerState|null>(null);
   const planRef=useRef<MealPlannerState|null>(null);
@@ -129,6 +130,12 @@ export function MealPlanner({records,db,accountId,pantry,onCook,onEdit}:Props) {
       </button>
     </header>
     {error&&<p role="alert" className="planner-error">{error}</p>}
+    {savedRecipes.length===0&&<div className="planner-first-recipe">
+      <div><strong>Your cookbook is empty.</strong>
+        <span>Add a recipe to begin planning meals; you can still write manual groceries below.</span>
+      </div>
+      <button type="button" className="button button-primary" onClick={onAdd}><Plus size={17}/> Add first recipe</button>
+    </div>}
     <div className="planner-weekbar">
       <div className="planner-week-controls">
         <button type="button" aria-label="Previous week" onClick={()=>setWeek(w=>addDays(w,-7))}><ArrowLeft size={18}/></button>
@@ -157,8 +164,9 @@ export function MealPlanner({records,db,accountId,pantry,onCook,onEdit}:Props) {
                       id={`meal-${day}-${slot}`}
                       aria-label={`${longDay(day)} ${slotLabel(slot)} recipe`}
                       value={assigned?.recipeId??''}
+                      disabled={savedRecipes.length===0}
                       onChange={event=>chooseRecipe(day,slot,event.target.value)}>
-                      <option value="">Add a recipe…</option>
+                      <option value="">{savedRecipes.length===0?'Add a recipe to your cookbook':'Add a recipe…'}</option>
                       {assigned&&!record&&<option value={assigned.recipeId}>Unavailable recipe — select another</option>}
                       {savedRecipes.map(item=>
                         <option key={item.resourceId} value={item.resourceId}>{item.working.version.title}</option>)}
