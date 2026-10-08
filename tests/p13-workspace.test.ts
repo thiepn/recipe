@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { indexedDB } from 'fake-indexeddb';
+import { IDBFactory } from 'fake-indexeddb';
 import { RecipeLocalDb, type LocalRecipeRecord } from '../src/data/local-db.ts';
 import { createBlankRecipe } from '../src/library/create.ts';
 import { newStep } from '../src/library/editor.ts';
@@ -48,7 +48,7 @@ class Server {
 const handles:RecipeLocalDb[]=[];
 afterEach(()=>{for(const h of handles)h.close();handles.length=0;});
 async function open(){
- const db=await RecipeLocalDb.open(indexedDB);handles.push(db);return db;
+ const db=await RecipeLocalDb.open(new IDBFactory());handles.push(db);return db;
 }
 function meal(record:LocalRecipeRecord,servings=2){
  return assignMeal(emptyMealPlanner(100),'2026-10-08','dinner',record.resourceId,servings,200);
