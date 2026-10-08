@@ -245,7 +245,7 @@ export class MealPlannerStore {
     this.#accountId=accountId;
   }
   async load(): Promise<MealPlannerState> {
-    await this.#writes;
+    await this.#writes.catch(() => undefined);
     return cleanMealPlanner(await this.#db.getMeta(this.#accountId,STORAGE_KEY));
   }
   save(state:MealPlannerState): Promise<void> {
@@ -255,4 +255,15 @@ export class MealPlannerStore {
     this.#writes=next;
     return next;
   }
+}
+
+/** A stable store survives Plan tab unmount/remount for the same live database.
+ * It preserves the write queue when a user navigates immediately after a change. */
+const planStores = new WeakMap<RecipeLocalDb,Map<string,MealPlannerStore>>();
+export function mealPlannerStoreFor(db:RecipeLocalDb,accountId:string):MealPlannerStore {
+  let accounts=planStores.get(db);
+  if(!accounts){accounts=new Map();planStores.set(db,accounts);}
+  let store=accounts.get(accountId);
+  if(!store){store=new MealPlannerStore(db,accountId);accounts.set(accountId,store);}
+  return store;
 }
