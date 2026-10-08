@@ -33,6 +33,7 @@ import {
   signInWithGoogle,
   signOutRecipe,
   UnsyncedChangesError,
+  UnsyncedWorkspaceError,
 } from '../auth/account.ts';
 import { RecipeCoreApi } from '../api/core.ts';
 import type { RecipeEditableCollectionBook } from '../api/protocol.ts';
@@ -177,7 +178,7 @@ function EmptyCookbook({ onAdd }: { onAdd: () => void }) {
       </div>
       <div>
         <h2 id="empty-cookbook-title">No recipes saved yet</h2>
-        <p>Your private cookbook will appear here. Start with a recipe you already know; importing from ChatGPT, links and photos is coming in later phases.</p>
+        <p>Your private cookbook will appear here. Start with a recipe you already know; import from a link, a photo, or pasted recipe text.</p>
         <button type="button" className="button button-primary" onClick={onAdd}>
           <Plus size={17} /> Create a recipe
         </button>
@@ -691,6 +692,8 @@ export default function App() {
     null | { mode: 'create' } | { mode: 'rename'; id: string; name: string }
   >(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [signOutLocalWarning, setSignOutLocalWarning] = useState<number | null>(null);
+  const [discardingLocalData, setDiscardingLocalData] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [workspaceConflicts, setWorkspaceConflicts] = useState<WorkspaceConflict[]>([]);
   const [workspaceStatus, setWorkspaceStatus] = useState<'disabled'|'ready'|'offline'|'conflict'>(
@@ -1120,18 +1123,18 @@ export default function App() {
             onClick={async () => {
               if (!runtime) return;
               try {
-                await signOutRecipe(
-                  runtime.authClient,
-                  runtime.db,
-                  runtime.accountId,
-                );
+                // Pantry updates are queued separately from the workspace stores.
+                await pantryWrites.current;
+                await signOutRecipe(runtime.authClient, runtime.db, runtime.accountId);
                 globalThis.location.assign('/');
               } catch (error) {
                 if (error instanceof UnsyncedChangesError)
                   setToast(
-                    `${error.pendingCount} unsynced change(s). Sync before signing out.`,
+                    `${error.pendingCount} unsynced recipe change(s). Sync before signing out.`,
                   );
-                else setToast('Could not sign out.');
+                else if (error instanceof UnsyncedWorkspaceError)
+                  setSignOutLocalWarning(error.pendingCount);
+                else setToast('Could not sign out. Your account remains open.');
               }
             }}
           >
@@ -1692,6 +1695,53 @@ export default function App() {
             </div>
           ))}
         </section>
+      )}
+      {signOutLocalWarning !== null && runtime && (
+        <div className="modal-layer" role="presentation">
+          <section className="sheet compact-sheet" role="dialog" aria-modal="true"
+            aria-labelledby="local-signout-title" aria-describedby="local-signout-description">
+            <div className="sheet-header">
+              <div>
+                <p className="eyebrow">Unsaved on this device</p>
+                <h2 id="local-signout-title">Keep your cooking data?</h2>
+              </div>
+              <button className="icon-button" type="button" disabled={discardingLocalData}
+                onClick={() => setSignOutLocalWarning(null)} aria-label="Cancel sign out">
+                <X size={21}/>
+              </button>
+            </div>
+            <p id="local-signout-description">
+              {signOutLocalWarning} pantry, plan or cooking item(s) have no confirmed
+              cloud backup. Signing out would permanently erase those items from
+              this browser. Synced recipes remain in your account.
+            </p>
+            <div className="signout-warning-actions">
+              <button className="button button-secondary" type="button"
+                disabled={discardingLocalData} onClick={() => setSignOutLocalWarning(null)}>
+                Keep my data
+              </button>
+              <button className="button button-primary" type="button"
+                disabled={discardingLocalData} onClick={async () => {
+                  setDiscardingLocalData(true);
+                  try {
+                    await pantryWrites.current;
+                    await signOutRecipe(runtime.authClient, runtime.db, runtime.accountId,
+                      { discardLocalWorkspace: true });
+                    globalThis.location.assign('/');
+                  } catch (error) {
+                    setSignOutLocalWarning(null);
+                    if (error instanceof UnsyncedChangesError)
+                      setToast('New unsynced recipe edits exist. Sync before signing out.');
+                    else setToast('Sign out failed. Try again without losing local changes.');
+                  } finally {
+                    setDiscardingLocalData(false);
+                  }
+                }}>
+                {discardingLocalData ? 'Signing out…' : 'Discard local data & sign out'}
+              </button>
+            </div>
+          </section>
+        </div>
       )}
       {toast && (
         <button className="toast" type="button" onClick={() => setToast(null)}>
