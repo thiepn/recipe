@@ -4,7 +4,7 @@ import { RecipeLocalDb, type LocalRecipeRecord } from '../src/data/local-db.ts';
 import { createBlankRecipe } from '../src/library/create.ts';
 import { newIngredient, newStep } from '../src/library/editor.ts';
 import {
-  MealPlannerStore, addDays, addManualItem, amountLabel, assignMeal,
+  MealPlannerStore, mealPlannerStoreFor, addDays, addManualItem, amountLabel, assignMeal,
   cleanMealPlanner, emptyMealPlanner, localToday, mondayOf,
   removeManualItem, shoppingRows, shoppingText, toggleManualItem,
   togglePurchased, weekDays,
@@ -66,9 +66,9 @@ describe('P12 calendar and meal-plan model',()=>{
   expect(p.entries[0]?.slot).toBe('lunch');
  });
  it('replaces malicious, unsupported or structurally invalid storage snapshots with defaults',()=>{
-  expect(cleanMealPlanner({schemaVersion:999,entries:[]})).toEqual(emptyMealPlanner( /* time is non-deterministic, verify below */).schemaVersion===1
-   ? expect.objectContaining({schemaVersion:1,entries:[],manualItems:[],purchased:[]})
-   : {});
+  expect(cleanMealPlanner({schemaVersion:999,entries:[]})).toMatchObject({
+   schemaVersion:1,entries:[],manualItems:[],purchased:[],
+  });
   expect(cleanMealPlanner({schemaVersion:1,entries:[{day:'2026-11-31'}]}).entries).toHaveLength(0);
   expect(cleanMealPlanner(null).manualItems).toHaveLength(0);
  });
@@ -151,6 +151,19 @@ describe('P12 manual groceries and durable account privacy',()=>{
   p=removeManualItem(p,id);
   expect(p.manualItems).toHaveLength(0);
   expect(amountLabel({amount:null,amountMax:null,unit:null})).toBe('Amount unspecified');
+ });
+ it('reuses the exact same queued store across tab remounts',async()=>{
+  db=await RecipeLocalDb.open(indexedDB);
+  const first=mealPlannerStoreFor(db,ownerA);
+  const second=mealPlannerStoreFor(db,ownerA);
+  const other=mealPlannerStoreFor(db,ownerB);
+  expect(second).toBe(first);
+  expect(other).not.toBe(first);
+  const r=recipe('Breakfast',[]);
+  const saved=assignMeal(emptyMealPlanner(),WEEK,'breakfast',r.resourceId);
+  const write=first.save(saved);
+  expect((await second.load()).entries).toHaveLength(1);
+  await write;
  });
  it('round-trips, serializes rapid writes, and isolates data by Account',async()=>{
   db=await RecipeLocalDb.open(indexedDB);
