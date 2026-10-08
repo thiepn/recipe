@@ -266,8 +266,12 @@ export function ingredientSuggestions(
     }
   }
   const needle = normalizeIngredientText(query);
-  return [...byKey.values()]
-    .filter(({ label }) => normalizeIngredientText(label).includes(needle))
+  return [...byKey.entries()]
+    .filter(([key, { label }]) =>
+      normalizeIngredientText(label).includes(needle) ||
+      (ALIAS_GROUPS[key]?.some((alias) => normalizeIngredientText(alias).includes(needle)) ?? false),
+    )
+    .map(([, value]) => value)
     .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
     .slice(0, Math.max(0, limit))
     .map(({ label }) => label);
