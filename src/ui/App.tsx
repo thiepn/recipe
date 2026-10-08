@@ -9,7 +9,6 @@ import {
   CloudOff,
   FolderHeart,
   Heart,
-  Home,
   LibraryBig,
   ListFilter,
   LogOut,
@@ -45,7 +44,6 @@ import {
 import { createBlankRecipe } from '../library/create.ts';
 import {
   collectionCards,
-  countFavoriteRecipes,
   filterRecipes,
   recipeCardFromLocal,
   type RecipeLibraryFilters,
@@ -59,7 +57,7 @@ import { CollectionSyncEngine } from '../sync/collection-sync.ts';
 import { RecipeSyncEngine } from '../sync/recipe-sync.ts';
 import './styles.css';
 
-type Section = 'home' | 'recipes' | 'collections' | 'cook' | 'plan';
+type Section = 'recipes' | 'collections' | 'cook' | 'plan';
 
 interface Runtime {
   accountId: string;
@@ -97,11 +95,11 @@ function initialSection(): Section {
   if (path.startsWith('/collections')) return 'collections';
   if (path.startsWith('/cook')) return 'cook';
   if (path.startsWith('/plan')) return 'plan';
-  return 'home';
+  return 'recipes';
 }
 
 function sectionPath(section: Section): string {
-  return section === 'home' ? '/' : `/${section}`;
+  return section === 'recipes' ? '/' : `/${section}`;
 }
 
 function hueFor(value: string): number {
@@ -155,30 +153,19 @@ function NavButton({
   );
 }
 
+
 function EmptyCookbook({ onAdd }: { onAdd: () => void }) {
   return (
-    <section className="empty-cookbook">
-      <div className="empty-illustration" aria-hidden="true">
-        <div className="plate-orbit plate-orbit-one" />
-        <div className="plate-orbit plate-orbit-two" />
-        <ChefHat size={56} strokeWidth={1.4} />
+    <section className="cookbook-empty" aria-labelledby="empty-cookbook-title">
+      <div className="cookbook-empty-icon" aria-hidden="true">
+        <BookOpen size={30} strokeWidth={1.5} />
       </div>
-      <p className="eyebrow">Your cookbook starts here</p>
-      <h2>Keep the recipes you never want to lose again.</h2>
-      <p>
-        Family recipes, things you found online, your own experiments—everything
-        will live in one private place and eventually become cookable step by
-        step.
-      </p>
-      <button className="button button-primary button-large" onClick={onAdd}>
-        <Plus size={19} />
-        Add your first recipe
-      </button>
-      <div className="capture-preview" aria-label="Future capture methods">
-        <span>Photo</span>
-        <span>URL</span>
-        <span>Voice</span>
-        <span>Manual</span>
+      <div>
+        <h2 id="empty-cookbook-title">No recipes saved yet</h2>
+        <p>Your private cookbook will appear here. Start with a recipe you already know; importing from ChatGPT, links and photos is coming in later phases.</p>
+        <button type="button" className="button button-primary" onClick={onAdd}>
+          <Plus size={17} /> Create a recipe
+        </button>
       </div>
     </section>
   );
@@ -200,8 +187,8 @@ function RecipeCard({
     <article
       className="recipe-card"
       style={recipeStyle(recipe.title)}
-      onClick={onOpen}
     >
+      <button className="recipe-card-open-target" type="button" onClick={onOpen} aria-label={`Open ${recipe.title}`} />
       <div className="recipe-card-visual">
         <div className="food-mark" aria-hidden="true">
           <Utensils size={30} strokeWidth={1.45} />
@@ -642,6 +629,18 @@ export default function App() {
     collectionId: null,
     sort: 'recent',
   });
+  const resetFilters = () => setFilters({
+    query: '',
+    favoritesOnly: false,
+    underThirtyMinutes: false,
+    difficulty: 'all',
+    collectionId: null,
+    sort: 'recent',
+  });
+  const hasActiveFilters = Boolean(
+    filters.query.trim() || filters.favoritesOnly || filters.underThirtyMinutes ||
+    filters.difficulty !== 'all' || filters.collectionId,
+  );
 
   const reload = useCallback(async (activeRuntime: Runtime) => {
     const [recipes, collectionBook, recipeConflicts, collectionConflicts] =
@@ -760,6 +759,10 @@ export default function App() {
   }, [reload]);
 
   useEffect(() => {
+    // Keep the previous /recipes deep link functional, but make / canonical.
+    if (globalThis.location.pathname === '/recipes') {
+      globalThis.history.replaceState(null, '', '/' + globalThis.location.search + globalThis.location.hash);
+    }
     const onPop = () => setSection(initialSection());
     globalThis.addEventListener('popstate', onPop);
     return () => globalThis.removeEventListener('popstate', onPop);
@@ -900,8 +903,7 @@ export default function App() {
           <span>Recipe</span>
         </div>
         <nav className="side-nav" aria-label="Primary">
-          <NavButton active={section === 'home'} icon={<Home size={19} />} label="Home" onClick={() => navigate('home')} />
-          <NavButton active={section === 'recipes'} icon={<LibraryBig size={19} />} label="Recipes" onClick={() => navigate('recipes')} />
+          <NavButton active={section === 'recipes'} icon={<LibraryBig size={19} />} label="Cookbook" onClick={() => navigate('recipes')} />
           <NavButton active={section === 'collections'} icon={<FolderHeart size={19} />} label="Collections" onClick={() => navigate('collections')} />
           <div className="nav-separator" />
           <NavButton active={section === 'cook'} icon={<ChefHat size={19} />} label="Cook" onClick={() => navigate('cook')} />
@@ -970,168 +972,69 @@ export default function App() {
         </header>
 
         <div className="page">
-          {section === 'home' && (
-            <>
-              <header className="page-header home-header">
-                <div>
-                  <p className="eyebrow">Private cookbook</p>
-                  <h1>What are we cooking?</h1>
-                  <p>
-                    {activeRecipes.length === 0
-                      ? 'Start collecting the recipes you want to remember.'
-                      : `${activeRecipes.length} recipe${activeRecipes.length === 1 ? '' : 's'} ready when you are.`}
-                  </p>
-                </div>
-                <button className="button button-primary desktop-action" onClick={() => setAddOpen(true)}>
-                  <Plus size={18} /> Add recipe
-                </button>
-              </header>
-
-              {activeRecipes.length === 0 ? (
-                <EmptyCookbook onAdd={() => setAddOpen(true)} />
-              ) : (
-                <div className="home-stack">
-                  <section>
-                    <div className="section-title-row">
-                      <div>
-                        <p className="eyebrow">Recently touched</p>
-                        <h2>Back to your kitchen</h2>
-                      </div>
-                      <button className="text-button" onClick={() => navigate('recipes')}>
-                        See all <ChevronRight size={16} />
-                      </button>
-                    </div>
-                    <div className="recipe-grid compact-grid">
-                      {activeRecipes.slice(0, 4).map((record) => (
-                        <RecipeCard
-                          key={record.resourceId}
-                          record={record}
-                          onOpen={() => setSelectedRecipeId(record.resourceId)}
-                          onFavorite={() =>
-                            void updateRecipe(record, (current) => ({
-                              ...current,
-                              recipe: {
-                                ...current.recipe,
-                                favorite: !current.recipe.favorite,
-                              },
-                            }))
-                          }
-                          onCollections={() => setCollectionRecipeId(record.resourceId)}
-                        />
-                      ))}
-                    </div>
-                  </section>
-
-                  <section className="home-insights">
-                    <button className="insight-card" onClick={() => {
-                      setFilters((current) => ({ ...current, favoritesOnly: true }));
-                      navigate('recipes');
-                    }}>
-                      <span className="insight-icon heart-bg"><Heart size={21} /></span>
-                      <span>
-                        <strong>{countFavoriteRecipes(activeRecipes)}</strong>
-                        <small>Favorites</small>
-                      </span>
-                      <ChevronRight size={18} />
-                    </button>
-                    <button className="insight-card" onClick={() => navigate('collections')}>
-                      <span className="insight-icon folder-bg"><FolderHeart size={21} /></span>
-                      <span>
-                        <strong>{collections.length}</strong>
-                        <small>Collections</small>
-                      </span>
-                      <ChevronRight size={18} />
-                    </button>
-                    <button className="insight-card" onClick={() => {
-                      setFilters((current) => ({ ...current, underThirtyMinutes: true }));
-                      navigate('recipes');
-                    }}>
-                      <span className="insight-icon clock-bg"><Clock3 size={21} /></span>
-                      <span>
-                        <strong>
-                          {activeRecipes.filter((recipe) => {
-                            const time = recipe.working.version.totalMinutes;
-                            return time !== null && time <= 30;
-                          }).length}
-                        </strong>
-                        <small>Under 30 min</small>
-                      </span>
-                      <ChevronRight size={18} />
-                    </button>
-                  </section>
-                </div>
-              )}
-            </>
-          )}
 
           {section === 'recipes' && (
-            <>
-              <header className="page-header">
-                <div>
-                  <p className="eyebrow">Cookbook</p>
-                  <h1>Recipes</h1>
-                  <p>Find what you saved by name, ingredient, tag, or collection.</p>
+            <section className="cookbook-page" aria-labelledby="cookbook-title">
+              <header className="cookbook-toolbar">
+                <div className="cookbook-heading">
+                  <h1 id="cookbook-title">My cookbook</h1>
+                  <span className="cookbook-count">
+                    {activeRecipes.length} {activeRecipes.length === 1 ? 'recipe' : 'recipes'}
+                  </span>
                 </div>
-                <button className="button button-primary desktop-action" onClick={() => setAddOpen(true)}>
+                <button type="button" className="button button-primary desktop-action" onClick={() => setAddOpen(true)}>
                   <Plus size={18} /> Add recipe
                 </button>
               </header>
 
-              <div className="library-toolbar">
-                <label className="search-box">
-                  <Search size={19} />
+              <div className="search-panel">
+                <label className="search-box cookbook-search">
+                  <Search size={21} aria-hidden="true" />
                   <input
+                    type="search"
                     value={filters.query}
-                    onChange={(event) =>
-                      setFilters((current) => ({ ...current, query: event.target.value }))
-                    }
-                    placeholder="Search recipes or ingredients"
-                    aria-label="Search recipes"
+                    onChange={(event) => setFilters((current) => ({ ...current, query: event.target.value }))}
+                    placeholder="Search recipes, ingredients, cuisines…"
+                    aria-label="Search saved recipes"
+                    autoComplete="off"
                   />
                   {filters.query && (
-                    <button
-                      className="clear-search"
-                      type="button"
-                      onClick={() => setFilters((current) => ({ ...current, query: '' }))}
-                    >
-                      <X size={17} />
+                    <button className="clear-search" type="button" aria-label="Clear search" onClick={() => setFilters((current) => ({ ...current, query: '' }))}>
+                      <X size={18} />
                     </button>
                   )}
                 </label>
+                <p>Searches your saved cookbook by name, ingredient and tag.</p>
+              </div>
+
+              <div className="library-toolbar cookbook-filters" role="group" aria-label="Filter recipes">
+                <button className={hasActiveFilters ? 'filter-chip' : 'filter-chip is-selected'} type="button" aria-pressed={!hasActiveFilters} onClick={resetFilters}>
+                  All recipes
+                </button>
                 <button
-                  className={`filter-chip ${filters.favoritesOnly ? 'is-selected' : ''}`}
-                  onClick={() =>
-                    setFilters((current) => ({
-                      ...current,
-                      favoritesOnly: !current.favoritesOnly,
-                    }))
-                  }
+                  type="button"
+                  className={filters.favoritesOnly ? 'filter-chip is-selected' : 'filter-chip'}
+                  aria-pressed={filters.favoritesOnly}
+                  onClick={() => setFilters((current) => ({ ...current, favoritesOnly: !current.favoritesOnly }))}
                 >
                   <Heart size={16} /> Favorites
                 </button>
                 <button
-                  className={`filter-chip ${filters.underThirtyMinutes ? 'is-selected' : ''}`}
-                  onClick={() =>
-                    setFilters((current) => ({
-                      ...current,
-                      underThirtyMinutes: !current.underThirtyMinutes,
-                    }))
-                  }
+                  type="button"
+                  className={filters.underThirtyMinutes ? 'filter-chip is-selected' : 'filter-chip'}
+                  aria-pressed={filters.underThirtyMinutes}
+                  onClick={() => setFilters((current) => ({ ...current, underThirtyMinutes: !current.underThirtyMinutes }))}
                 >
-                  <Clock3 size={16} /> ≤ 30 min
+                  <Clock3 size={16} /> 30 minutes or less
                 </button>
                 <label className="select-chip">
                   <ListFilter size={16} />
                   <select
                     value={filters.difficulty}
-                    onChange={(event) =>
-                      setFilters((current) => ({
-                        ...current,
-                        difficulty: event.target.value as RecipeLibraryFilters['difficulty'],
-                      }))
-                    }
+                    aria-label="Filter by difficulty"
+                    onChange={(event) => setFilters((current) => ({ ...current, difficulty: event.target.value as RecipeLibraryFilters['difficulty'] }))}
                   >
-                    <option value="all">Any difficulty</option>
+                    <option value="all">All difficulties</option>
                     <option value="easy">Easy</option>
                     <option value="medium">Medium</option>
                     <option value="hard">Hard</option>
@@ -1142,36 +1045,25 @@ export default function App() {
                     <FolderHeart size={16} />
                     <select
                       value={filters.collectionId ?? ''}
-                      onChange={(event) =>
-                        setFilters((current) => ({
-                          ...current,
-                          collectionId: event.target.value || null,
-                        }))
-                      }
+                      aria-label="Filter by collection"
+                      onChange={(event) => setFilters((current) => ({ ...current, collectionId: event.target.value || null }))}
                     >
                       <option value="">All collections</option>
                       {collections.map((collection) => (
-                        <option key={collection.id} value={collection.id}>
-                          {collection.name}
-                        </option>
+                        <option key={collection.id} value={collection.id}>{collection.name}</option>
                       ))}
                     </select>
                   </label>
                 )}
                 <label className="select-chip sort-chip">
                   <select
-                    aria-label="Sort recipes"
                     value={filters.sort}
-                    onChange={(event) =>
-                      setFilters((current) => ({
-                        ...current,
-                        sort: event.target.value as RecipeLibraryFilters['sort'],
-                      }))
-                    }
+                    aria-label="Sort recipes"
+                    onChange={(event) => setFilters((current) => ({ ...current, sort: event.target.value as RecipeLibraryFilters['sort'] }))}
                   >
                     <option value="recent">Recently updated</option>
-                    <option value="name">Name</option>
-                    <option value="time">Cooking time</option>
+                    <option value="name">Name A–Z</option>
+                    <option value="time">Shortest cooking time</option>
                   </select>
                 </label>
               </div>
@@ -1179,53 +1071,37 @@ export default function App() {
               {activeRecipes.length === 0 ? (
                 <EmptyCookbook onAdd={() => setAddOpen(true)} />
               ) : visibleRecipes.length === 0 ? (
-                <section className="no-results">
-                  <Search size={34} strokeWidth={1.4} />
+                <section className="no-results" aria-live="polite">
+                  <Search size={30} strokeWidth={1.5} />
                   <h2>No matching recipes</h2>
-                  <p>Try clearing a filter or searching for another ingredient.</p>
-                  <button
-                    className="button button-secondary"
-                    onClick={() =>
-                      setFilters({
-                        query: '',
-                        favoritesOnly: false,
-                        underThirtyMinutes: false,
-                        difficulty: 'all',
-                        collectionId: null,
-                        sort: 'recent',
-                      })
-                    }
-                  >
+                  <p>Try a different ingredient or remove some filters.</p>
+                  <button type="button" className="button button-secondary" onClick={resetFilters}>
                     Clear filters
                   </button>
                 </section>
               ) : (
                 <>
                   <div className="results-row">
-                    <span>
-                      {visibleRecipes.length} recipe{visibleRecipes.length === 1 ? '' : 's'}
-                    </span>
+                    <span>{visibleRecipes.length} {visibleRecipes.length === 1 ? 'recipe' : 'recipes'}</span>
+                    {hasActiveFilters && (
+                      <button className="text-button" type="button" onClick={resetFilters}>
+                        Clear filters <X size={14} />
+                      </button>
+                    )}
                   </div>
                   <div className="recipe-grid">
                     {visibleRecipes.map((card) => {
-                      const record = library.recipes.find(
-                        (recipe) => recipe.resourceId === card.id,
-                      );
+                      const record = library.recipes.find((recipe) => recipe.resourceId === card.id);
                       if (!record) return null;
                       return (
                         <RecipeCard
                           key={record.resourceId}
                           record={record}
                           onOpen={() => setSelectedRecipeId(record.resourceId)}
-                          onFavorite={() =>
-                            void updateRecipe(record, (current) => ({
-                              ...current,
-                              recipe: {
-                                ...current.recipe,
-                                favorite: !current.recipe.favorite,
-                              },
-                            }))
-                          }
+                          onFavorite={() => void updateRecipe(record, (current) => ({
+                            ...current,
+                            recipe: { ...current.recipe, favorite: !current.recipe.favorite },
+                          }))}
                           onCollections={() => setCollectionRecipeId(record.resourceId)}
                         />
                       );
@@ -1233,7 +1109,7 @@ export default function App() {
                   </div>
                 </>
               )}
-            </>
+            </section>
           )}
 
           {section === 'collections' && (
@@ -1366,8 +1242,8 @@ export default function App() {
       </main>
 
       <nav className="mobile-nav" aria-label="Primary">
-        <NavButton active={section === 'home'} icon={<Home size={20} />} label="Home" onClick={() => navigate('home')} />
-        <NavButton active={section === 'recipes'} icon={<LibraryBig size={20} />} label="Recipes" onClick={() => navigate('recipes')} />
+        <NavButton active={section === 'recipes'} icon={<LibraryBig size={20} />} label="Cookbook" onClick={() => navigate('recipes')} />
+        <NavButton active={section === 'collections'} icon={<FolderHeart size={20} />} label="Collections" onClick={() => navigate('collections')} />
         <button className="mobile-add" onClick={() => setAddOpen(true)} aria-label="Add recipe">
           <Plus size={24} />
         </button>
