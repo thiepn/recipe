@@ -2,13 +2,13 @@
 
 Personal cooking system for **https://recipe.thiepn.dev**.
 
-Recipe is designed around one loop:
+Recipe is a **search-first private cookbook**. The everyday experience is:
 
 ```text
-Capture → Verify → Recipe → Prepare → Cook → Review → Improve
+Save or import → Search recipes and ingredients → Open → Cook
 ```
 
-It is not a public recipe feed or generic CRUD cookbook. Each account owns an isolated private cookbook, recipes retain provenance and version history, and the structured domain model is designed to power an interactive Cook Mode rather than static instruction text.
+The cookbook dashboard is the application root (`/`). Saved recipes are owned by individual accounts, preserve source provenance and version history, and remain searchable without AI. The existing structured recipe domain also supports a future kitchen-first Cook Mode. AI-powered ChatGPT imports and GPT-6 Luna assistance are optional later phases, not prerequisites for basic search and cooking.
 
 ## Architecture
 
@@ -99,9 +99,17 @@ supabase/
   migrations/
 ```
 
+## P3 — complete
+
+The initial recipe library, text search, favorites and collections are implemented. See `docs/P3_FINAL_CERTIFICATION.md`.
+
+## P4 — implemented in branch
+
+The P4 search-first redesign consolidates the Recipes page into the single root cookbook, removes the separate homepage and overview stat cards, and upgrades responsive search/filter layout. See `docs/P4_SEARCH_FIRST_COOKBOOK.md`.
+
 ## Next
 
-**P3 — Recipe Library, Search, Collections & Visual Product Shell**
+**P5 — Ingredient Intelligence:** inventory-aware matching and exact missing-ingredient counts; followed by P6 authenticated imports, P7 ChatGPT write actions and P8 optional Luna capabilities.
 
 ## P2 production gates
 
