@@ -5,6 +5,7 @@ import {
   type RecipeEditableCollectionBook,
 } from '../api/protocol.ts';
 import { RecipeApiError, RecipeCoreApi } from '../api/core.ts';
+import { isRetryableSyncFailure } from './retry.ts';
 import {
   RecipeLocalDb,
   type CollectionConflictRecord,
@@ -44,14 +45,7 @@ export function editableCollectionBookFromRemote(
 function disposition(
   error: unknown,
 ): { state: 'retry' | 'quarantined'; stopCycle: boolean } {
-  if (!(error instanceof RecipeApiError))
-    return { state: 'retry', stopCycle: true };
-  if (
-    error.status === 0 ||
-    error.status === 401 ||
-    error.status === 403 ||
-    error.status >= 500
-  )
+  if (isRetryableSyncFailure(error))
     return { state: 'retry', stopCycle: true };
   return { state: 'quarantined', stopCycle: true };
 }
