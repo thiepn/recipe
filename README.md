@@ -122,3 +122,9 @@ Authenticated private draft creation now supports pasted recipe text, structured
 ## P2 production gates
 
 Before public release, THIEPN Account must allow the Recipe OAuth callback, full THIEPN Account deletion must coordinate Recipe deletion across the separate Core project, and private source-media upload/deletion must be certified in the Capture phase. Core Gateway production CORS already allows `https://recipe.thiepn.dev`.
+
+## Current work (October 2026)
+
+P9–P13 have added Recipe Studio editing, guided Cook Mode with durable timers, weekly meal planning and shopping lists, and off-by-default Account workspace cloud continuity. **P13 sync is not production-qualified**; do not enable it until the Core migration, Gateway and two-device checks in `docs/P13_CROSS_DEVICE_CONTINUITY.md` pass.
+
+P14 proposes a safety guard against clearing locally saved pantry, meal plans and cooking sessions on sign-out without an explicit discard choice. See `docs/P14_SIGNOUT_DATA_SAFETY.md`. Private Recipe MCP / ChatGPT Actions and Luna require their own OAuth, API and production activation gates; code merging alone does not activate either.
