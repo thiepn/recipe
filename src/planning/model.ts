@@ -25,7 +25,7 @@ const manualItemSchema = z.object({
 
 const shoppingCheckSchema = z.object({
   week: isoDay,
-  key: z.string().min(1).max(400),
+  key: z.string().min(1).max(1024),
 }).strict();
 
 export const mealPlannerSchema = z.object({
@@ -81,7 +81,7 @@ export function addDays(day: string, delta: number): string {
 }
 export function mondayOf(day: string): string {
   const date=dayDate(day);
-  return addDays(day, -(date.getUTCDay()+6)%7);
+  return addDays(day, -((date.getUTCDay()+6)%7));
 }
 export function weekDays(monday: string): string[] {
   const start=mondayOf(monday);
@@ -192,7 +192,7 @@ export function shoppingRows(
       const key=`${canonical}|${conversion.unit??''}|${preparation}|${qualifier}|${kind}`;
       const found=groups.get(key);
       if(found){
-        if(mergeable&&found.amount!==null)found.amount=amount(found.amount+qty);
+        if(mergeable&&found.amount!==null&&qty!==null)found.amount=amount(found.amount+qty);
         found.contributions++;
         found.recipeNames.add(document.version.title);
       }else{
