@@ -6,7 +6,7 @@ import {
 import type { LocalRecipeRecord, RecipeLocalDb } from '../data/local-db.ts';
 import { boundedServings, digitalTimer, kitchenIngredientText, stepProgress } from '../kitchen/model.ts';
 import {
-  KitchenSessionStore, createKitchenSession, dismissKitchenTimer, pauseKitchenTimer,
+  KitchenSessionStore, kitchenSessionStoreFor, createKitchenSession, dismissKitchenTimer, pauseKitchenTimer,
   remainingTimerSeconds, restoreKitchenSession, resumeKitchenTimer,
   startKitchenTimer, timerState, updateKitchenSession, type KitchenSession,
 } from '../kitchen/session.ts';
@@ -22,7 +22,7 @@ interface Props {
 }
 
 export function CookWorkspace({records,selectedId,onChoose,onExit,onEdit,db,accountId}:Props) {
-  const store=useMemo(()=>new KitchenSessionStore(db,accountId),[db,accountId]);
+  const store=useMemo(()=>kitchenSessionStoreFor(db,accountId),[db,accountId]);
   const [savedSessions,setSavedSessions]=useState<KitchenSession[]>([]);
   const [loadingSessions,setLoadingSessions]=useState(true);
   const [storageError,setStorageError]=useState('');
