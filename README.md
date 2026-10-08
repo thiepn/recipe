@@ -103,7 +103,7 @@ supabase/
 
 The initial recipe library, text search, favorites and collections are implemented. See `docs/P3_FINAL_CERTIFICATION.md`.
 
-## P4 — implemented in branch
+## P4 — merged and CI verified
 
 The P4 search-first redesign consolidates the Recipes page into the single root cookbook, removes the separate homepage and overview stat cards, and upgrades responsive search/filter layout. See `docs/P4_SEARCH_FIRST_COOKBOOK.md`.
 
