@@ -1667,7 +1667,7 @@ export default function App() {
               <div>
                 <button className="button button-secondary" type="button" disabled={resolvingWorkspace}
                   onClick={async()=>{
-                    if(!runtime.workspaceSync)return;
+                    if(!runtime?.workspaceSync)return;
                     setResolvingWorkspace(true);
                     try{
                       await runtime.workspaceSync.resolve(conflict,'use-cloud');
@@ -1679,7 +1679,7 @@ export default function App() {
                   }}>Use cloud version</button>
                 <button className="button button-primary" type="button" disabled={resolvingWorkspace}
                   onClick={async()=>{
-                    if(!runtime.workspaceSync)return;
+                    if(!runtime?.workspaceSync)return;
                     setResolvingWorkspace(true);
                     try{
                       await runtime.workspaceSync.resolve(conflict,'keep-local');
