@@ -177,24 +177,30 @@ export class RecipeWorkspaceSync {
 
   async resolve(conflict:WorkspaceConflict,choice:'keep-local'|'use-cloud'):Promise<void>{
     const key=workspaceKey(conflict.kind,conflict.resourceKey);
-    if(!key)throw new Error('Missing resource');
+    // The dialog is only a snapshot. Re-read cloud state before honoring
+    // either choice; never accept an expired version as the new baseline.
+    const latest=await this.#api.workspaceList();
+    const remote=latest.documents.find(row=>
+      workspaceKey(row.kind,row.resourceKey)===key);
+    const revision=remote?.revision??0;
+    const document=remote?.document??null;
+    if(revision!==conflict.remoteRevision || !same(document,conflict.remote))
+      throw new Error('Cloud changed since this conflict. Sync again before resolving.');
+
     const existing=await this.#base(conflict.kind,conflict.resourceKey);
-    if(existing && existing.revision>conflict.remoteRevision)
-      throw new Error('Cloud revision has changed. Sync again before resolving.');
+    if(existing && existing.revision>revision)
+      throw new Error('A newer cloud revision is already known. Sync again.');
+
+    const local=await this.#readLocal(conflict.kind,conflict.resourceKey);
     if(choice==='use-cloud'){
-      // Only explicit user consent permits destructive local replacement.
-      await this.#writeLocal(conflict.kind,conflict.resourceKey,conflict.remote);
-    }else{
-      // If the local state has since changed, retain the freshest device edit.
-      // Setting the server revision as base schedules it for a CAS push.
-      const current=await this.#readLocal(conflict.kind,conflict.resourceKey);
-      if(same(current,conflict.remote)){
-        await this.#saveBase(conflict.kind,conflict.resourceKey,
-          conflict.remoteRevision,conflict.remote);
-        return;
-      }
+      // A user choosing an older dialog must never discard edits made locally
+      // while the dialog was open.
+      if(!same(local,conflict.local))
+        throw new Error('This device changed since the conflict. Sync again.');
+      await this.#writeLocal(conflict.kind,conflict.resourceKey,document);
     }
-    await this.#saveBase(conflict.kind,conflict.resourceKey,
-      conflict.remoteRevision,conflict.remote);
+    // Keep-local preserves the freshest device data, including edits made
+    // after the dialog opened. A subsequent CAS push checks cloud revision.
+    await this.#saveBase(conflict.kind,conflict.resourceKey,revision,document);
   }
 }

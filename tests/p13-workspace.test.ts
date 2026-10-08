@@ -127,6 +127,39 @@ describe('P13 lossless cross-device workspace',()=>{
   expect((await mealPlannerStoreFor(b,owner).load()).entries[0]?.servings).toBe(3);
   expect((await sync.syncOnce()).conflicts).toEqual([]);
  });
+ it('rejects a stale cloud choice after another device updates the remote',async()=>{
+  const record=fixture(),server=new Server();
+  const a=await buildWithRecord(record),b=await buildWithRecord(record);
+  const storeA=mealPlannerStoreFor(a,owner),storeB=mealPlannerStoreFor(b,owner);
+  const syncA=new RecipeWorkspaceSync(a,server.api(),owner);
+  const syncB=new RecipeWorkspaceSync(b,server.api(),owner);
+  await storeA.save(meal(record,2));
+  await storeB.save(meal(record,4));
+  await syncA.syncOnce();
+  const conflict=(await syncB.syncOnce()).conflicts[0]!;
+  await storeA.save(meal(record,3));
+  await syncA.syncOnce();
+  await expect(syncB.resolve(conflict,'use-cloud')).rejects.toThrow('Cloud changed');
+  await expect(syncB.resolve(conflict,'keep-local')).rejects.toThrow('Cloud changed');
+  expect((await storeB.load()).entries[0]?.servings).toBe(4);
+ });
+ it('refuses to overwrite new device edits after a conflict dialog opened',async()=>{
+  const record=fixture(),server=new Server();
+  const a=await buildWithRecord(record),b=await buildWithRecord(record);
+  const storeA=mealPlannerStoreFor(a,owner),storeB=mealPlannerStoreFor(b,owner);
+  await storeA.save(meal(record,2));
+  await storeB.save(meal(record,4));
+  const syncA=new RecipeWorkspaceSync(a,server.api(),owner);
+  const syncB=new RecipeWorkspaceSync(b,server.api(),owner);
+  await syncA.syncOnce();
+  const conflict=(await syncB.syncOnce()).conflicts[0]!;
+  await storeB.save(meal(record,5));
+  await expect(syncB.resolve(conflict,'use-cloud')).rejects.toThrow('This device changed');
+  expect((await storeB.load()).entries[0]?.servings).toBe(5);
+  await syncB.resolve(conflict,'keep-local');
+  expect((await syncB.syncOnce()).pushed).toBe(1);
+  expect((server.rows.get('plan:main')?.document as ReturnType<typeof meal>).entries[0]?.servings).toBe(5);
+ });
  it('persists and restores an account-scoped cooking session',async()=>{
   const record=fixture(),server=new Server();
   const a=await buildWithRecord(record),b=await buildWithRecord(record);
