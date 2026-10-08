@@ -55,9 +55,8 @@ import {
 } from '../data/local-db.ts';
 import { CollectionSyncEngine } from '../sync/collection-sync.ts';
 import { RecipeSyncEngine } from '../sync/recipe-sync.ts';
+import { legacyCookbookRedirect, sectionForPath, sectionPath, type Section } from './navigation.ts';
 import './styles.css';
-
-type Section = 'recipes' | 'collections' | 'cook' | 'plan';
 
 interface Runtime {
   accountId: string;
@@ -90,16 +89,7 @@ function env(name: string): string {
 }
 
 function initialSection(): Section {
-  const path = globalThis.location?.pathname ?? '/';
-  if (path.startsWith('/recipes')) return 'recipes';
-  if (path.startsWith('/collections')) return 'collections';
-  if (path.startsWith('/cook')) return 'cook';
-  if (path.startsWith('/plan')) return 'plan';
-  return 'recipes';
-}
-
-function sectionPath(section: Section): string {
-  return section === 'recipes' ? '/' : `/${section}`;
+  return sectionForPath(globalThis.location?.pathname ?? '/');
 }
 
 function hueFor(value: string): number {
@@ -760,8 +750,9 @@ export default function App() {
 
   useEffect(() => {
     // Keep the previous /recipes deep link functional, but make / canonical.
-    if (globalThis.location.pathname === '/recipes') {
-      globalThis.history.replaceState(null, '', '/' + globalThis.location.search + globalThis.location.hash);
+    const redirect = legacyCookbookRedirect(globalThis.location.pathname);
+    if (redirect) {
+      globalThis.history.replaceState(null, '', redirect + globalThis.location.search + globalThis.location.hash);
     }
     const onPop = () => setSection(initialSection());
     globalThis.addEventListener('popstate', onPop);
