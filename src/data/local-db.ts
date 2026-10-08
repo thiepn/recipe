@@ -457,10 +457,25 @@ export class RecipeLocalDb {
       [STORES.documents, STORES.outbox, STORES.conflicts],
       'readwrite',
     );
-    tx.objectStore(STORES.documents).put(record);
+    const done = transactionDone(tx);
+    const documents = tx.objectStore(STORES.documents);
+    const latest = (await requestResult(
+      documents.get([record.accountId, record.resourceId]),
+    )) as LocalRecipeRecord | undefined;
+    // A conflict response may arrive after another local edit was committed.
+    // Conflict resolution must show that newest working copy, not erase it.
+    documents.put({
+      ...record,
+      working: latest?.working ?? record.working,
+      localRevision: latest?.localRevision ?? record.localRevision,
+      tombstone: latest?.tombstone ?? record.tombstone,
+      updatedAt: Math.max(record.updatedAt, latest?.updatedAt ?? 0),
+    });
     if (mutation) tx.objectStore(STORES.outbox).put(mutation);
-    tx.objectStore(STORES.conflicts).put(conflict);
-    await transactionDone(tx);
+    tx.objectStore(STORES.conflicts).put({
+      ...conflict, local: latest?.working ?? conflict.local,
+    });
+    await done;
   }
 
   async listConflicts(accountId: string): Promise<ConflictRecord[]> {
@@ -624,10 +639,21 @@ export class RecipeLocalDb {
       ],
       'readwrite',
     );
-    tx.objectStore(STORES.collectionBook).put(record);
+    const done = transactionDone(tx);
+    const books = tx.objectStore(STORES.collectionBook);
+    const latest = (await requestResult(books.get(record.accountId)))
+      as LocalCollectionBookRecord | undefined;
+    books.put({
+      ...record,
+      working: latest?.working ?? record.working,
+      localRevision: latest?.localRevision ?? record.localRevision,
+      updatedAt: Math.max(record.updatedAt, latest?.updatedAt ?? 0),
+    });
     tx.objectStore(STORES.collectionOutbox).put(mutation);
-    tx.objectStore(STORES.collectionConflicts).put(conflict);
-    await transactionDone(tx);
+    tx.objectStore(STORES.collectionConflicts).put({
+      ...conflict, local: latest?.working ?? conflict.local,
+    });
+    await done;
   }
 
   async listCollectionConflicts(
