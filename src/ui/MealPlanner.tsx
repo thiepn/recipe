@@ -120,9 +120,9 @@ export function MealPlanner({records,db,accountId,pantry,onCook,onEdit}:Props) {
   return <section className="meal-planner" aria-labelledby="meal-plan-heading">
     <header className="planner-head">
       <div>
-        <p className="eyebrow">Your recipe book / At the table</p>
-        <h1 id="meal-plan-heading">The week, on a plate.</h1>
-        <p>Choose what to cook. Your shopping list fills itself from the actual ingredients.</p>
+        <p className="eyebrow">Kitchen / Planning</p>
+        <h1 id="meal-plan-heading">Meal plan</h1>
+        <p>Choose recipes for each day. The shopping list follows your menu.</p>
       </div>
       <button type="button" className="planner-shop-jump" onClick={()=>shoppingRef.current?.scrollIntoView({behavior:'smooth',block:'start'})}>
         <ShoppingBasket size={18}/> Shopping list <span>{shoppingCount}</span>
