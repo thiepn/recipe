@@ -76,7 +76,11 @@ export function ImportSheet({ open, initialMode, onClose, onSave }: Props) {
     setDuplicate(false);
     try {
       if (mode === 'text') {
-        setParsed(parseRecipeImport(rawText, 'text'));
+        const parsed = parseRecipeImport(rawText, 'text');
+        setParsed({
+          ...parsed,
+          sourceUrl: url.trim() ? safeSourceUrl(url) : null,
+        });
       } else if (mode === 'website') {
         const sanitized = safeSourceUrl(url);
         const html = await fetchPublicRecipePage(sanitized);
@@ -205,6 +209,11 @@ export function ImportSheet({ open, initialMode, onClose, onSave }: Props) {
                   placeholder={'Kimchi Fried Rice\nIngredients\n2 cups cooked rice\n1 tbsp sesame oil\nInstructions\n1. Heat a pan.\n2. Add the rice.'}
                 />
                 <small>Use clear Ingredients and Instructions headings. You can correct everything before saving. Also accepts recipe JSON-LD.</small>
+                <label htmlFor="import-text-source">Source URL (optional)</label>
+                <input id="import-text-source" type="url" value={url} maxLength={2048}
+                  placeholder="https://example.com/recipe"
+                  onChange={event => setUrl(event.target.value)} />
+                <small>If a website blocks automatic extraction, paste its recipe here and retain the source link.</small>
               </div>
             )}
             {mode === 'website' && (
