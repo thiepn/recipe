@@ -5,6 +5,8 @@ import {
 } from '@supabase/supabase-js';
 import type { RecipeLocalDb } from '../data/local-db.ts';
 import { clearRecipeMediaCache } from '../media/cache.ts';
+import { mealPlannerStoreFor } from '../planning/model.ts';
+import { kitchenSessionStoreFor } from '../kitchen/session.ts';
 
 const RETURN_KEY = 'thiepn-recipe:return-to';
 const STORAGE_KEY = 'thiepn-recipe-auth-v1';
@@ -26,6 +28,13 @@ export class UnsyncedChangesError extends Error {
       `Cannot sign out safely while ${pendingCount} local Recipe change(s) are not synced.`,
     );
     this.name = 'UnsyncedChangesError';
+  }
+}
+
+export class UnsyncedWorkspaceError extends Error {
+  constructor(public readonly pendingCount: number) {
+    super(`Signing out would discard ${pendingCount} device-only Recipe workspace item(s).`);
+    this.name = 'UnsyncedWorkspaceError';
   }
 }
 
@@ -147,11 +156,20 @@ export async function signOutRecipe(
   client: SupabaseClient,
   localDb: RecipeLocalDb,
   accountId: string,
-  options: { discardUnsynced?: boolean } = {},
+  options: { discardUnsynced?: boolean; discardLocalWorkspace?: boolean } = {},
 ): Promise<void> {
+  // Drain local planner/cooking queues so rapid edits cannot disappear during logout.
+  await Promise.all([
+    mealPlannerStoreFor(localDb, accountId).load(),
+    kitchenSessionStoreFor(localDb, accountId).flush(),
+  ]);
   const pending = await localDb.countUnsynced(accountId);
   if (pending > 0 && !options.discardUnsynced)
     throw new UnsyncedChangesError(pending);
+
+  const workspacePending = await localDb.countUnsyncedWorkspace(accountId);
+  if (workspacePending > 0 && !options.discardLocalWorkspace)
+    throw new UnsyncedWorkspaceError(workspacePending);
 
   await localDb.wipeAccount(accountId);
   await clearRecipeMediaCache(accountId);
