@@ -255,6 +255,12 @@ export class MealPlannerStore {
     this.#writes=next;
     return next;
   }
+  clear(): Promise<void> {
+    const next=this.#writes.catch(()=>undefined).then(()=>
+      this.#db.setMeta(this.#accountId,STORAGE_KEY,null));
+    this.#writes=next;
+    return next;
+  }
 }
 
 /** A stable store survives Plan tab unmount/remount for the same live database.
