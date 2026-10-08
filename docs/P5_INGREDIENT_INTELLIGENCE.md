@@ -36,8 +36,8 @@ Ingredient list is stored with `RecipeLocalDb.setMeta(accountId, 'pantry-v1', ..
 ### Verification gates
 
 - [x] P5 deterministic regression tests for alias behavior, collisions, required/optional, pantry staples, unknown recipes, filter ranking, autocomplete, and account-scoped persistence.
-- [ ] CI TypeScript and Vitest success.
-- [ ] CI production build success.
+- [x] CI TypeScript and Vitest success (24/24 tests, 4 test files).
+- [x] CI production build success.
 - [ ] Real-device UI and full signed-in account acceptance tests.
 
 ### P6 handoff
