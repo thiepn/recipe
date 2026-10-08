@@ -6,6 +6,7 @@ import {
   type RecipeMutationResult,
 } from '../api/protocol.ts';
 import { RecipeApiError, RecipeCoreApi } from '../api/core.ts';
+import { isRetryableSyncFailure } from './retry.ts';
 import {
   RecipeLocalDb,
   type ConflictRecord,
@@ -81,15 +82,7 @@ function mutationPayload(mutation: OutboxMutation): RecipeMutation {
 function failureDisposition(
   error: unknown,
 ): { state: 'retry' | 'quarantined'; stopCycle: boolean } {
-  if (!(error instanceof RecipeApiError))
-    return { state: 'retry', stopCycle: true };
-
-  if (
-    error.status === 0 ||
-    error.status === 401 ||
-    error.status === 403 ||
-    error.status >= 500
-  )
+  if (isRetryableSyncFailure(error))
     return { state: 'retry', stopCycle: true };
 
   return { state: 'quarantined', stopCycle: false };
