@@ -122,9 +122,12 @@ function CookSession({record,onExit,store}: {
   useEffect(()=>{
     let cancelled=false;
     const refresh=()=>void store.load(record).then(value=>{
-      if(cancelled||!value)return;
-      sessionRef.current=value;
-      setSession(value);
+      if(cancelled)return;
+      // A remote tombstone resets the visible session without resurrecting it
+      // in IndexedDB until the user deliberately makes a new cooking edit.
+      const current=value??createKitchenSession(doc);
+      sessionRef.current=current;
+      setSession(current);
     }).catch(()=>setStorageError('Could not refresh this cooking session.'));
     globalThis.addEventListener('recipe:workspace-changed',refresh);
     return ()=>{cancelled=true;globalThis.removeEventListener('recipe:workspace-changed',refresh);};
