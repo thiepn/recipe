@@ -29,12 +29,19 @@ export function CookWorkspace({records,selectedId,onChoose,onExit,onEdit,db,acco
   useEffect(()=>{
     if(selectedId!==null)return;
     let cancelled=false;
-    setLoadingSessions(true);
-    void store.list(records)
-      .then(sessions=>{if(!cancelled){setSavedSessions(sessions);setStorageError('');}})
-      .catch(()=>{if(!cancelled)setStorageError('Saved cooking sessions could not be loaded on this device.');})
-      .finally(()=>{if(!cancelled)setLoadingSessions(false);});
-    return ()=>{cancelled=true;};
+    const refresh=()=>{
+      setLoadingSessions(true);
+      void store.list(records)
+        .then(sessions=>{if(!cancelled){setSavedSessions(sessions);setStorageError('');}})
+        .catch(()=>{if(!cancelled)setStorageError('Saved cooking sessions could not be loaded on this device.');})
+        .finally(()=>{if(!cancelled)setLoadingSessions(false);});
+    };
+    refresh();
+    globalThis.addEventListener('recipe:workspace-changed',refresh);
+    return ()=>{
+      cancelled=true;
+      globalThis.removeEventListener('recipe:workspace-changed',refresh);
+    };
   },[store,records,selectedId]);
   const selected=records.find(r=>r.resourceId===selectedId);
   if(selected)return <CookSession key={selected.resourceId} record={selected} store={store} onExit={onExit}/>;
@@ -112,6 +119,17 @@ function CookSession({record,onExit,store}: {
     })();
     return ()=>{cancelled=true;};
   },[store,record.resourceId]);
+  useEffect(()=>{
+    let cancelled=false;
+    const refresh=()=>void store.load(record).then(value=>{
+      if(cancelled||!value)return;
+      sessionRef.current=value;
+      setSession(value);
+    }).catch(()=>setStorageError('Could not refresh this cooking session.'));
+    globalThis.addEventListener('recipe:workspace-changed',refresh);
+    return ()=>{cancelled=true;globalThis.removeEventListener('recipe:workspace-changed',refresh);};
+  },[store,record.resourceId]);
+
   const change=useCallback((transform:(current:KitchenSession)=>KitchenSession)=>{
     const current=sessionRef.current;
     if(!current)return;
