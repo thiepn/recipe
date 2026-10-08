@@ -3,7 +3,7 @@ import type {
   LocalRecipeRecord,
 } from '../data/local-db.ts';
 
-export type RecipeSort = 'recent' | 'name' | 'time';
+export type RecipeSort = 'recent' | 'name' | 'time' | 'match';
 
 export interface RecipeLibraryFilters {
   query: string;
