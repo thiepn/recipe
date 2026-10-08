@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { canonicalJson } from './canonical.ts';
 import type { RecipeCoreApi } from '../api/core.ts';
 import type { RecipeLocalDb, LocalRecipeRecord } from '../data/local-db.ts';
 import { mealPlannerSchema, mealPlannerStoreFor } from '../planning/model.ts';
@@ -31,16 +32,7 @@ const metaBase=(kind:WorkspaceKind,key:string)=>
 const localKey=(kind:WorkspaceKind,key:string)=>
   kind==='plan'?'meal-plan-v1':`kitchen-session-v1:${key}`;
 
-// JSONB normalizes object member order. Do not interpret key-order changes as edits.
-export function canonicalJson(value:unknown):string {
-  if(value===undefined)return 'null';
-  if(value===null || typeof value!=='object')return JSON.stringify(value)??'null';
-  if(Array.isArray(value))return `[${value.map(canonicalJson).join(',')}]`;
-  const obj=value as Record<string,unknown>;
-  return `{${Object.keys(obj).sort()
-    .filter(key=>obj[key]!==undefined)
-    .map(key=>`${JSON.stringify(key)}:${canonicalJson(obj[key])}`).join(',')}}`;
-}
+export { canonicalJson } from './canonical.ts';
 const same=(a:unknown,b:unknown)=>canonicalJson(a)===canonicalJson(b);
 
 /**
