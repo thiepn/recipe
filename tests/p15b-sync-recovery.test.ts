@@ -108,6 +108,33 @@ describe('P15B atomic recipe sync recovery', () => {
       .toEqual([mutationTwo]);
   });
 
+  it('keeps the latest local draft when a delayed server conflict arrives', async () => {
+    const db = await openDb();
+    const { record, first, working } = recipeFixture();
+    await db.commitMutation(record, first);
+    const latest = {
+      ...record,
+      working: editedWorking(working, 'New edit during conflict request'),
+      localRevision: 2,
+      updatedAt: 180,
+    };
+    await db.putDocument(latest);
+    await db.recordConflict({
+      ...record, syncState: 'conflict', updatedAt: 150,
+    }, { ...first, state: 'conflict' }, {
+      id: '55555555-5555-4555-8555-555555555555',
+      accountId: owner, resourceId: record.resourceId,
+      mutationId: mutationOne, reason: 'revision',
+      baseRevision: 0, remoteRevision: 2,
+      base: null, local: working, remote, createdAt: 150,
+    });
+    expect((await db.getDocument(owner, record.resourceId))?.working.version.title)
+      .toBe('New edit during conflict request');
+    expect((await db.getDocument(owner, record.resourceId))?.localRevision).toBe(2);
+    expect((await db.listConflicts(owner))[0]?.local?.version.title)
+      .toBe('New edit during conflict request');
+  });
+
   it('safely adopts canonical data after the last queued mutation succeeds', async () => {
     const db = await openDb();
     const { record, first, working } = recipeFixture();
@@ -170,6 +197,34 @@ describe('P15B atomic collection recovery', () => {
     await db.putCollectionBook(changed);
     await db.markCollectionSyncFailure(owner, 1, 30);
     expect(await db.getCollectionBook(owner)).toEqual(changed);
+  });
+
+  it('keeps the latest collections when a delayed server conflict arrives', async () => {
+    const db = await openDb();
+    const { current, first } = collectionFixture();
+    await db.commitCollectionMutation(current, first);
+    const newer = {
+      ...current, localRevision: 2, updatedAt: 40,
+      working: { schemaVersion: 1 as const, collections: [{
+        id: '66666666-6666-4666-8666-666666666666',
+        kind: 'manual' as const, name: 'Family', description: null,
+        iconKey: null, coverImagePath: null, position: 0, metadata: {},
+        recipeIds: [],
+      }] },
+    };
+    await db.putCollectionBook(newer);
+    await db.recordCollectionConflict({
+      ...current, syncState: 'conflict', updatedAt: 20,
+    }, { ...first, state: 'conflict' }, {
+      id: '55555555-5555-4555-8555-555555555555',
+      accountId: owner, mutationId: mutationOne,
+      reason: 'revision', baseRevision: 0, remoteRevision: 2,
+      base: null, local: current.working, remote: remoteBook, createdAt: 20,
+    });
+    expect((await db.getCollectionBook(owner))?.working.collections[0]?.name)
+      .toBe('Family');
+    expect((await db.listCollectionConflicts(owner))[0]?.local.collections[0]?.name)
+      .toBe('Family');
   });
 
   it('preserves later collection changes on acknowledgement', async () => {
