@@ -10,6 +10,11 @@ import {
   recipeMutationBatchResultSchema,
   type RecipeMutation,
 } from './protocol.ts';
+import {
+  lunaDraftSchema,lunaHelpSchema,
+  generateInputSchema,extractInputSchema,helpInputSchema,
+  type GenerateInput,type ExtractInput,type HelpInput,
+} from '../ai/contracts.ts';
 
 const failureSchema = z
   .object({
@@ -31,6 +36,13 @@ const successEnvelopeSchema = z
     meta: z.object({ requestId: z.string().min(1) }).strict(),
   })
   .strict();
+
+const lunaResponseSchema=<T extends z.ZodType>(data:T)=>z.object({
+  capability:z.enum(['recipe.generate','recipe.extract','recipe.cookingHelp']),
+  version:z.number().int().positive(),
+  model:z.literal('gpt-6-luna'),
+  data,
+}).strict();
 
 export class RecipeApiError extends Error {
   constructor(
@@ -84,6 +96,7 @@ export class RecipeCoreApi {
     method: 'GET' | 'POST' | 'DELETE',
     schema: T,
     body?: unknown,
+    timeoutMs?: number,
   ): Promise<z.output<T>> {
     const token = await this.#getAccessToken();
     if (!token)
@@ -103,7 +116,7 @@ export class RecipeCoreApi {
     const init: RequestInit = {
       method,
       headers,
-      signal: AbortSignal.timeout(this.#timeoutMs),
+      signal: AbortSignal.timeout(timeoutMs ?? this.#timeoutMs),
       credentials: 'omit',
       redirect: 'error',
     };
@@ -141,6 +154,30 @@ export class RecipeCoreApi {
 
     const envelope = successEnvelopeSchema.parse(payload);
     return schema.parse(envelope.data);
+  }
+
+  async lunaGenerate(input: GenerateInput) {
+    const parsed=generateInputSchema.parse(input);
+    const response=await this.#request(
+      '/v1/recipe/ai/generate','POST',lunaResponseSchema(lunaDraftSchema),
+      {input:parsed},30_000);
+    return response.data;
+  }
+
+  async lunaExtract(input: ExtractInput) {
+    const parsed=extractInputSchema.parse(input);
+    const response=await this.#request(
+      '/v1/recipe/ai/extract','POST',lunaResponseSchema(lunaDraftSchema),
+      {input:parsed},30_000);
+    return response.data;
+  }
+
+  async lunaHelp(input: HelpInput) {
+    const parsed=helpInputSchema.parse(input);
+    const response=await this.#request(
+      '/v1/recipe/ai/help','POST',lunaResponseSchema(lunaHelpSchema),
+      {input:parsed},30_000);
+    return response.data;
   }
 
   manifest() {

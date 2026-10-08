@@ -45,6 +45,8 @@ import {
 import { createBlankRecipe } from '../library/create.ts';
 import { createImportedRecipe, importDuplicateCandidates, type ImportDraft, type ImportKind } from '../import/recipe-import.ts';
 import { ImportSheet } from './ImportSheet.tsx';
+import { LunaSheet } from './LunaSheet.tsx';
+import { uiLanguage } from '../ai/contracts.ts';
 import {
   EMPTY_PANTRY,
   addIngredients,
@@ -87,6 +89,8 @@ interface LibraryState {
   recipeConflicts: number;
   collectionConflicts: number;
 }
+
+const LUNA_ENABLED = import.meta.env.VITE_RECIPE_LUNA_ENABLED === 'staged-v1';
 
 const EMPTY_LIBRARY: LibraryState = {
   recipes: [],
@@ -288,11 +292,13 @@ function AddSheet({
   onClose,
   onCreate,
   onImport,
+  onGenerate,
 }: {
   open: boolean;
   onClose: () => void;
   onCreate: (title: string) => Promise<void>;
   onImport: (kind: ImportKind) => void;
+  onGenerate?: (() => void) | undefined;
 }) {
   const [title, setTitle] = useState('');
   const [saving, setSaving] = useState(false);
@@ -345,6 +351,10 @@ function AddSheet({
             <TimerReset size={22} />
             <span><strong>Paste recipe text</strong><small>Ingredients and steps</small></span>
           </button>
+          {onGenerate && <button className="capture-option is-ready" type="button" onClick={onGenerate}>
+            <Sparkles size={22} />
+            <span><strong>Suggest with Luna</strong><small>Optional AI · review before saving</small></span>
+          </button>}
         </div>
         <form
           className="blank-recipe-form"
@@ -459,12 +469,14 @@ function RecipeDetail({
   onClose,
   onFavorite,
   onCollections,
+  onAsk,
 }: {
   record: LocalRecipeRecord;
   collections: string[];
   onClose: () => void;
   onFavorite: () => void;
   onCollections: () => void;
+  onAsk?: (() => void) | undefined;
 }) {
   const recipe = recipeCardFromLocal(record);
   const doc = record.working;
@@ -530,10 +542,14 @@ function RecipeDetail({
             </div>
           )}
 
-          <button className="button button-secondary full-width" onClick={onCollections}>
-            <FolderHeart size={18} />
-            Organize
-          </button>
+          <div className="recipe-detail-actions">
+            <button className="button button-secondary" onClick={onCollections}>
+              <FolderHeart size={18} /> Organize
+            </button>
+            {onAsk && <button className="button button-secondary" onClick={onAsk}>
+              <Sparkles size={18}/> Ask Luna
+            </button>}
+          </div>
 
           <section className="detail-section">
             <div className="section-heading">
@@ -633,6 +649,16 @@ export default function App() {
   const [addOpen, setAddOpen] = useState(false);
   const [importMode, setImportMode] = useState<ImportKind>('text');
   const [importOpen, setImportOpen] = useState(false);
+  const [lunaOpen, setLunaOpen] = useState(false);
+  const [lunaMode, setLunaMode] = useState<'generate'|'help'>('generate');
+  const [lunaRecipeContext, setLunaRecipeContext] = useState<LocalRecipeRecord | null>(null);
+  const openGenerate = () => {
+    setAddOpen(false);setLunaMode('generate');setLunaRecipeContext(null);setLunaOpen(true);
+  };
+  const openHelp = (record: LocalRecipeRecord) => {
+    setSelectedRecipeId(null);
+    setLunaMode('help');setLunaRecipeContext(record);setLunaOpen(true);
+  };
   const openImporter = (mode: ImportKind) => {
     setAddOpen(false);
     setImportMode(mode);
@@ -890,6 +916,18 @@ export default function App() {
     await runtime.recipeSync.stageReplace(transform(record.working));
     await reload(runtime);
     void sync(runtime);
+  };
+
+  const saveImportedDraft = async (draft: ImportDraft, allowDuplicate: boolean): Promise<'saved'|'duplicate'> => {
+    if (!runtime) throw new Error('Sign in before saving a recipe.');
+    const duplicates = await importDuplicateCandidates(draft, library.recipes);
+    if (duplicates.length > 0 && !allowDuplicate) return 'duplicate';
+    const document = await createImportedRecipe(draft, { locale: navigator.language });
+    await runtime.recipeSync.stageCreate(document);
+    await reload(runtime);
+    setSelectedRecipeId(document.recipe.id);
+    void sync(runtime);
+    return 'saved';
   };
 
   const updateCollections = async (book: RecipeEditableCollectionBook) => {
@@ -1434,23 +1472,47 @@ export default function App() {
           void sync(runtime);
         }}
         onImport={openImporter}
+        onGenerate={LUNA_ENABLED ? openGenerate : undefined}
       />
       <ImportSheet
         open={importOpen}
         initialMode={importMode}
         onClose={() => setImportOpen(false)}
-        onSave={async (draft: ImportDraft, allowDuplicate: boolean) => {
-          if (!runtime) throw new Error('Sign in before importing.');
-          const duplicates = await importDuplicateCandidates(draft, library.recipes);
-          if (duplicates.length > 0 && !allowDuplicate) return 'duplicate';
-          const document = await createImportedRecipe(draft, { locale: navigator.language });
-          await runtime.recipeSync.stageCreate(document);
-          await reload(runtime);
-          setSelectedRecipeId(document.recipe.id);
-          void sync(runtime);
-          return 'saved';
-        }}
+        onSave={saveImportedDraft}
+        onLunaExtract={LUNA_ENABLED ? async (sourceText,sourceKind) => {
+          if (!runtime) throw new Error('Sign in to use Luna.');
+          return runtime.api.lunaExtract({
+            sourceText,sourceKind,language:uiLanguage(navigator.language),
+          });
+        } : undefined}
       />
+      {LUNA_ENABLED && <LunaSheet
+        open={lunaOpen}
+        mode={lunaMode}
+        title={lunaRecipeContext?.working.version.title}
+        pantry={pantry.ingredients}
+        onClose={() => setLunaOpen(false)}
+        onGenerate={async (request,avoidIngredients,servings) => {
+          if (!runtime) throw new Error('Sign in to use Luna.');
+          return runtime.api.lunaGenerate({
+            request,availableIngredients:pantry.ingredients.slice(0,30),
+            avoidIngredients,servings,language:uiLanguage(navigator.language),
+          });
+        }}
+        onHelp={async question => {
+          if (!runtime || !lunaRecipeContext) throw new Error('Open a recipe first.');
+          const doc=lunaRecipeContext.working;
+          return runtime.api.lunaHelp({
+            recipe:{
+              title:doc.version.title,
+              ingredients:doc.ingredients.map(i => [i.quantity,i.unit,i.name].filter(v=>v!==null).join(' ')).slice(0,100),
+              steps:doc.steps.map(s=>s.instruction).slice(0,80),
+            },
+            question,language:uiLanguage(navigator.language),
+          });
+        }}
+        onSave={saveImportedDraft}
+      />}
 
       {selectedRecipe && (
         <RecipeDetail
@@ -1467,6 +1529,7 @@ export default function App() {
             }))
           }
           onCollections={() => setCollectionRecipeId(selectedRecipe.resourceId)}
+          onAsk={LUNA_ENABLED ? () => openHelp(selectedRecipe) : undefined}
         />
       )}
 

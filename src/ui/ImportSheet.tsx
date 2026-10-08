@@ -1,5 +1,6 @@
 import { useEffect, useState, type ChangeEvent } from 'react';
-import { FileImage, FileText, Globe, LoaderCircle, X } from 'lucide-react';
+import { FileImage, FileText, Globe, LoaderCircle, Sparkles, X } from 'lucide-react';
+import type { LunaDraft } from '../ai/contracts.ts';
 import {
   extractSchemaRecipe,
   fetchPublicRecipePage,
@@ -18,6 +19,7 @@ interface Props {
   initialMode: Mode;
   onClose: () => void;
   onSave: (draft: ImportDraft, allowDuplicate: boolean) => Promise<SaveResult>;
+  onLunaExtract?: ((text: string, kind: 'text' | 'ocr') => Promise<LunaDraft>) | undefined;
 }
 
 function splitLines(value: string): string[] {
@@ -25,7 +27,7 @@ function splitLines(value: string): string[] {
     .map(line => line.trim()).filter(Boolean);
 }
 
-export function ImportSheet({ open, initialMode, onClose, onSave }: Props) {
+export function ImportSheet({ open, initialMode, onClose, onSave, onLunaExtract }: Props) {
   const [mode, setMode] = useState<Mode>(initialMode);
   const [rawText, setRawText] = useState('');
   const [url, setUrl] = useState('');
@@ -132,6 +134,34 @@ export function ImportSheet({ open, initialMode, onClose, onSave }: Props) {
     } finally {
       setBusy(false);
     }
+  };
+
+  const runLunaExtract = async () => {
+    if (!draft || !onLunaExtract || busy || !['text','photo'].includes(draft.kind)) return;
+    setBusy(true);setError('');setDuplicate(false);
+    try {
+      const result = await onLunaExtract(
+        draft.originalText, draft.method === 'ocr' ? 'ocr' : 'text',
+      );
+      const next: ImportDraft = {
+        ...draft,
+        title: result.title,
+        description: result.description,
+        ingredients: result.ingredients,
+        steps: result.steps,
+        servings: result.servings,
+        totalMinutes: result.totalMinutes,
+        warnings: [
+          ...draft.warnings,
+          'Luna-assisted extraction: verify every amount, allergen and step against the original source.',
+          ...result.uncertainties,
+          ...result.notes,
+        ],
+      };
+      setParsed(next);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Luna is unavailable. You can still review and save the original extraction.');
+    } finally { setBusy(false); }
   };
 
   const submit = async () => {
@@ -250,6 +280,13 @@ export function ImportSheet({ open, initialMode, onClose, onSave }: Props) {
                 Back to source
               </button>
             </div>
+            {onLunaExtract && (draft.kind === 'text' || draft.kind === 'photo') && draft.originalText.length >= 20 &&
+              draft.originalText.length <= 16_000 && (
+              <button type="button" className="button button-secondary luna-extract-action"
+                disabled={busy} onClick={() => void runLunaExtract()}>
+                <Sparkles size={16}/> {busy ? 'Luna is reading…' : 'Refine extraction with Luna (optional)'}
+              </button>
+            )}
             {draft.warnings.length > 0 && (
               <div className="import-warnings" role="note">
                 {draft.warnings.map((warning, index) => <p key={index}>{warning}</p>)}
