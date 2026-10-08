@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import {
   BookOpen,
+  Check,
   ChefHat,
   ChevronRight,
   CircleAlert,
@@ -42,6 +43,17 @@ import {
   setRecipeInCollection,
 } from '../library/collections.ts';
 import { createBlankRecipe } from '../library/create.ts';
+import {
+  EMPTY_PANTRY,
+  addIngredients,
+  cleanPantry,
+  ingredientSuggestions,
+  rankByPantry,
+  removeIngredient,
+  type MissingLimit,
+  type PantryDocument,
+  type RecipeCoverage,
+} from '../library/ingredients.ts';
 import {
   collectionCards,
   filterRecipes,
@@ -166,11 +178,13 @@ function RecipeCard({
   onOpen,
   onFavorite,
   onCollections,
+  coverage,
 }: {
   record: LocalRecipeRecord;
   onOpen: () => void;
   onFavorite: () => void;
   onCollections: () => void;
+  coverage?: RecipeCoverage | null;
 }) {
   const recipe = recipeCardFromLocal(record);
   return (
@@ -239,6 +253,27 @@ function RecipeCard({
                 {tag}
               </span>
             ))}
+          </div>
+        )}
+        {coverage && (
+          <div className="ingredient-coverage" aria-label="Ingredient availability">
+            {coverage.status === 'unknown' ? (
+              <span className="coverage-unknown">Ingredient list incomplete</span>
+            ) : coverage.missing.length === 0 ? (
+              <span className="coverage-complete"><Check size={14} /> All {coverage.required} required types covered</span>
+            ) : (
+              <>
+                <span className="coverage-partial">
+                  {coverage.missing.length} missing · {coverage.available}/{coverage.required} covered
+                </span>
+                <span className="coverage-missing" title={coverage.missing.join(', ')}>
+                  Missing: {coverage.missing.join(', ')}
+                </span>
+              </>
+            )}
+            {coverage.status === 'measured' && coverage.assumed.length > 0 && (
+              <span className="coverage-assumed">Assumed: {coverage.assumed.join(', ')}</span>
+            )}
           </div>
         )}
       </div>
@@ -611,6 +646,10 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
+  const [pantry, setPantry] = useState<PantryDocument>(EMPTY_PANTRY);
+  const [pantryText, setPantryText] = useState('');
+  const [missingLimit, setMissingLimit] = useState<MissingLimit>('any');
+  const pantryWrites = useRef<Promise<void>>(Promise.resolve());
   const [filters, setFilters] = useState<RecipeLibraryFilters>({
     query: '',
     favoritesOnly: false,
@@ -619,18 +658,46 @@ export default function App() {
     collectionId: null,
     sort: 'recent',
   });
-  const resetFilters = () => setFilters({
-    query: '',
-    favoritesOnly: false,
-    underThirtyMinutes: false,
-    difficulty: 'all',
-    collectionId: null,
-    sort: 'recent',
-  });
+  const resetFilters = () => {
+    setFilters({
+      query: '',
+      favoritesOnly: false,
+      underThirtyMinutes: false,
+      difficulty: 'all',
+      collectionId: null,
+      sort: pantry.ingredients.length ? 'match' : 'recent',
+    });
+    setMissingLimit('any');
+  };
   const hasActiveFilters = Boolean(
     filters.query.trim() || filters.favoritesOnly || filters.underThirtyMinutes ||
-    filters.difficulty !== 'all' || filters.collectionId,
+    filters.difficulty !== 'all' || filters.collectionId ||
+    (pantry.ingredients.length > 0 && missingLimit !== 'any'),
   );
+
+  const savePantry = (next: PantryDocument) => {
+    if (!runtime) return;
+    setPantry(next);
+    if (next.ingredients.length === 0) {
+      setMissingLimit('any');
+      setFilters((current) => ({ ...current, sort: current.sort === 'match' ? 'recent' : current.sort }));
+    }
+    const { accountId, db } = runtime;
+    pantryWrites.current = pantryWrites.current
+      .catch(() => undefined)
+      .then(() => db.setMeta(accountId, 'pantry-v1', next));
+    void pantryWrites.current.catch(() => setToast('Could not save your ingredient list on this device.'));
+  };
+
+  const addPantryText = (raw: string) => {
+    const next = addIngredients(pantry, raw);
+    if (next.ingredients.length === pantry.ingredients.length) return;
+    savePantry(next);
+    setPantryText('');
+    setFilters((current) => ({ ...current, sort: 'match' }));
+  };
+
+  const removePantryItem = (name: string) => savePantry(removeIngredient(pantry, name));
 
   const reload = useCallback(async (activeRuntime: Runtime) => {
     const [recipes, collectionBook, recipeConflicts, collectionConflicts] =
@@ -723,7 +790,12 @@ export default function App() {
         };
 
         await reload(nextRuntime);
+        const savedPantry = cleanPantry(await db.getMeta<unknown>(identity.userId, 'pantry-v1'));
         if (!cancelled) {
+          setPantry(savedPantry);
+          if (savedPantry.ingredients.length > 0) {
+            setFilters((current) => ({ ...current, sort: 'match' }));
+          }
           setRuntime(nextRuntime);
           setBootState('ready');
         }
@@ -790,6 +862,17 @@ export default function App() {
   const visibleRecipes = useMemo(
     () => filterRecipes(activeRecipes, library.collectionBook, filters),
     [activeRecipes, filters, library.collectionBook],
+  );
+  const rankedRecipes = useMemo(
+    () => rankByPantry(visibleRecipes, activeRecipes, pantry, {
+      maxMissing: missingLimit,
+      sortByMatch: filters.sort === 'match',
+    }),
+    [visibleRecipes, activeRecipes, pantry, missingLimit, filters.sort],
+  );
+  const pantrySuggestions = useMemo(
+    () => ingredientSuggestions(activeRecipes, pantryText, pantry.ingredients),
+    [activeRecipes, pantryText, pantry.ingredients],
   );
   const selectedRecipe = selectedRecipeId
     ? library.recipes.find((recipe) => recipe.resourceId === selectedRecipeId)
@@ -998,6 +1081,99 @@ export default function App() {
                 <p>Searches your saved cookbook by name, ingredient and tag.</p>
               </div>
 
+
+              <section className="pantry-workbench" aria-labelledby="pantry-heading">
+                <div className="pantry-head">
+                  <div>
+                    <h2 id="pantry-heading">Cook with what you have</h2>
+                    <p>Find recipes by the ingredients already in your kitchen.</p>
+                  </div>
+                  {pantry.ingredients.length > 0 && (
+                    <button type="button" className="text-button" onClick={() => savePantry({ ...pantry, ingredients: [] })}>
+                      Clear ingredients
+                    </button>
+                  )}
+                </div>
+                <form
+                  className="pantry-entry"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    addPantryText(pantryText);
+                  }}
+                >
+                  <label className="pantry-input-wrap">
+                    <Plus size={17} aria-hidden="true" />
+                    <input
+                      type="text"
+                      value={pantryText}
+                      onChange={(event) => setPantryText(event.target.value)}
+                      placeholder="Add eggs, rice, onions…"
+                      aria-label="Available ingredients (comma separated)"
+                      list="pantry-suggestions"
+                      maxLength={1000}
+                    />
+                    <datalist id="pantry-suggestions">
+                      {pantrySuggestions.map((label) => <option key={label} value={label} />)}
+                    </datalist>
+                  </label>
+                  <button type="submit" className="button button-secondary" disabled={!pantryText.trim()}>
+                    Add
+                  </button>
+                </form>
+                {pantryText.trim().length > 0 && pantrySuggestions.length > 0 && (
+                  <div className="pantry-suggestions" aria-label="Ingredient suggestions">
+                    {pantrySuggestions.slice(0, 5).map((name) => (
+                      <button type="button" key={name} onClick={() => addPantryText(name)}>
+                        <Plus size={13} /> {name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {pantry.ingredients.length > 0 && (
+                  <div className="pantry-selected" aria-label="Your available ingredients">
+                    {pantry.ingredients.map((name) => (
+                      <button
+                        type="button"
+                        className="pantry-token"
+                        key={name}
+                        title={`Remove ${name}`}
+                        aria-label={`Remove ${name}`}
+                        onClick={() => removePantryItem(name)}
+                      >
+                        {name}<X size={14} />
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="pantry-foot">
+                  <label className="pantry-staples">
+                    <input
+                      type="checkbox"
+                      checked={pantry.assumeStaples}
+                      onChange={(event) => savePantry({ ...pantry, assumeStaples: event.target.checked })}
+                    />
+                    Assume salt, water and black pepper
+                  </label>
+                  <span>Matches ingredient types only, not quantities. Stored on this device.</span>
+                </div>
+                {pantry.ingredients.length > 0 && (
+                  <div className="pantry-match-controls" role="group" aria-label="Limit missing ingredients">
+                    <span>Show recipes missing:</span>
+                    {([['any', 'Any'], [0, 'None'], [1, '≤ 1'], [2, '≤ 2']] as const).map(([value, label]) => (
+                      <button
+                        type="button"
+                        key={value}
+                        className={missingLimit === value ? 'pantry-limit is-selected' : 'pantry-limit'}
+                        aria-pressed={missingLimit === value}
+                        onClick={() => setMissingLimit(value)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </section>
+
               <div className="library-toolbar cookbook-filters" role="group" aria-label="Filter recipes">
                 <button className={hasActiveFilters ? 'filter-chip' : 'filter-chip is-selected'} type="button" aria-pressed={!hasActiveFilters} onClick={resetFilters}>
                   All recipes
@@ -1052,6 +1228,7 @@ export default function App() {
                     aria-label="Sort recipes"
                     onChange={(event) => setFilters((current) => ({ ...current, sort: event.target.value as RecipeLibraryFilters['sort'] }))}
                   >
+                    <option value="match" disabled={pantry.ingredients.length === 0}>Best ingredient match</option>
                     <option value="recent">Recently updated</option>
                     <option value="name">Name A–Z</option>
                     <option value="time">Shortest cooking time</option>
@@ -1061,11 +1238,11 @@ export default function App() {
 
               {activeRecipes.length === 0 ? (
                 <EmptyCookbook onAdd={() => setAddOpen(true)} />
-              ) : visibleRecipes.length === 0 ? (
+              ) : rankedRecipes.length === 0 ? (
                 <section className="no-results" aria-live="polite">
                   <Search size={30} strokeWidth={1.5} />
                   <h2>No matching recipes</h2>
-                  <p>Try a different ingredient or remove some filters.</p>
+                  <p>Try another ingredient or allow more missing ingredients.</p>
                   <button type="button" className="button button-secondary" onClick={resetFilters}>
                     Clear filters
                   </button>
@@ -1073,7 +1250,7 @@ export default function App() {
               ) : (
                 <>
                   <div className="results-row">
-                    <span>{visibleRecipes.length} {visibleRecipes.length === 1 ? 'recipe' : 'recipes'}</span>
+                    <span>{rankedRecipes.length} {rankedRecipes.length === 1 ? 'recipe' : 'recipes'}</span>
                     {hasActiveFilters && (
                       <button className="text-button" type="button" onClick={resetFilters}>
                         Clear filters <X size={14} />
@@ -1081,13 +1258,14 @@ export default function App() {
                     )}
                   </div>
                   <div className="recipe-grid">
-                    {visibleRecipes.map((card) => {
+                    {rankedRecipes.map(({ card, coverage }) => {
                       const record = library.recipes.find((recipe) => recipe.resourceId === card.id);
                       if (!record) return null;
                       return (
                         <RecipeCard
                           key={record.resourceId}
                           record={record}
+                          coverage={pantry.ingredients.length > 0 ? coverage : null}
                           onOpen={() => setSelectedRecipeId(record.resourceId)}
                           onFavorite={() => void updateRecipe(record, (current) => ({
                             ...current,
