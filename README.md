@@ -119,6 +119,10 @@ Authenticated private draft creation now supports pasted recipe text, structured
 
 **P7 — Authenticated ChatGPT Recipe Actions:** private recipe search and draft uploads through narrow tools. P8 adds optional GPT-6 Luna extraction and generation.
 
+## P7 — ChatGPT Recipe MCP integration (staged)
+
+An authenticated, owner-scoped remote MCP endpoint in `api/mcp.ts` exposes private recipe listing, recipe retrieval, ingredient matching, and confirmation-gated private draft creation through THIEPN Core. The Recipe P7 endpoint requires resource-bound OAuth access tokens from THIEPN Account; the Account P7 consent and token-binding changes are a separate companion PR. Full ChatGPT connectivity is **not enabled by merging alone**. See `docs/P7_CHATGPT_RECIPE_MCP.md` for configuration and real-account acceptance.
+
 ## P2 production gates
 
 Before public release, THIEPN Account must allow the Recipe OAuth callback, full THIEPN Account deletion must coordinate Recipe deletion across the separate Core project, and private source-media upload/deletion must be certified in the Capture phase. Core Gateway production CORS already allows `https://recipe.thiepn.dev`.
