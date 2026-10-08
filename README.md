@@ -111,9 +111,13 @@ The P4 search-first redesign consolidates the Recipes page into the single root 
 
 The cookbook now includes an account-scoped, device-local ingredient selector, conservative English/German ingredient normalization, required/optional ingredient coverage, exact missing-item names, ranked recipe results, and filters for zero/one/two missing ingredient types. Quantities are **not** checked, so matching never claims a recipe is cookable with available amounts. See `docs/P5_INGREDIENT_INTELLIGENCE.md`.
 
+## P6 — import pipeline implemented in code
+
+Authenticated private draft creation now supports pasted recipe text, structured JSON-LD, browser-permitted HTTPS page extraction, and optional on-device photo OCR. It provides an editable review stage, provenance metadata, and best-effort local duplicate warnings. The existing Account/Core sync path remains authoritative. URL extraction is CORS-dependent, photo originals are not retained, and canonical source-table writes remain a backend follow-up. See `docs/P6_IMPORT_PIPELINE.md`.
+
 ## Next
 
-**P6 — Authenticated Recipe Import Pipeline:** URL/text/photo capture with provenance, reviewable drafts, and deduplication. P7 adds ChatGPT write actions; P8 optional GPT-6 Luna capabilities.
+**P7 — Authenticated ChatGPT Recipe Actions:** private recipe search and draft uploads through narrow tools. P8 adds optional GPT-6 Luna extraction and generation.
 
 ## P2 production gates
 
