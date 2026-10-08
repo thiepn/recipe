@@ -39,7 +39,7 @@ No schema migrations, authentication changes or synchronization protocol changes
 - [x] Favorites, collections, recipe detail, create flow and sync handlers remain wired.
 - [x] Legacy route and independent navigation have dedicated tests.
 - [x] Desktop/mobile responsive rules and visible focus states are defined in CSS.
-- [ ] GitHub CI verifies TypeScript, unit tests and the production build.
+- [x] GitHub CI verified TypeScript, all 11 unit tests and the production build (PR #8).
 - [ ] Human/device visual QA verifies keyboard navigation, 320px–1440px layouts, sign-in, sign-out, offline/search/sync and real recipe content.
 
 ## Follow-up
