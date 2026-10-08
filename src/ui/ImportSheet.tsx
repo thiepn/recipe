@@ -19,7 +19,7 @@ interface Props {
   initialMode: Mode;
   onClose: () => void;
   onSave: (draft: ImportDraft, allowDuplicate: boolean) => Promise<SaveResult>;
-  onLunaExtract?: (text: string, kind: 'text' | 'ocr') => Promise<LunaDraft>;
+  onLunaExtract?: ((text: string, kind: 'text' | 'ocr') => Promise<LunaDraft>) | undefined;
 }
 
 function splitLines(value: string): string[] {
