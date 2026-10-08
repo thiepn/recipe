@@ -1481,6 +1481,7 @@ export default function App() {
               records={activeRecipes}
               pantry={pantry}
               onCook={beginCooking}
+              onEdit={editRecipe}
             />
           )}
         </div>
