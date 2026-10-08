@@ -226,9 +226,10 @@ export function rankByPantry(
     const record = byId.get(card.id);
     return record ? [{ card, coverage: evaluateRecipe(record, pantry) }] : [];
   });
-  const filtered = active && options.maxMissing !== 'any'
+  const maxMissing = options.maxMissing;
+  const filtered = active && typeof maxMissing === 'number'
     ? ranked.filter(({ coverage }) =>
-      coverage.status === 'measured' && coverage.missing.length <= options.maxMissing,
+      coverage.status === 'measured' && coverage.missing.length <= maxMissing,
     )
     : ranked;
   if (!active || !options.sortByMatch) return filtered;
