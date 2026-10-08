@@ -2920,3 +2920,85 @@ body {
   .kitchen-timer{padding:17px 12px;}
   .kitchen-return{font-size:.75rem;}
 }
+
+
+/* P11 — Resumable kitchen sessions and parallel timers */
+.kitchen-loading,.kitchen-resume-badge{display:block;font-size:.73rem;font-weight:750;line-height:1.45;}
+.kitchen-loading{color:#8b796a;margin:8px 0;}
+.kitchen-resume-badge{
+  color:#416749;
+  background:#e8f0e2;
+  border:1px solid #cddcc4;
+  padding:6px 9px;
+  border-radius:5px;
+  margin:1px 0 9px;
+}
+.kitchen-loading-session{
+  padding:40px 20px;
+  max-width:580px;
+  margin:24px auto;
+  text-align:center;
+  line-height:1.6;
+  color:var(--muted);
+}
+.kitchen-storage-error{
+  background:#fff1e5;
+  border:1px solid #e2c4ab;
+  border-radius:7px;
+  color:#8c482a;
+  font-size:.77rem;
+  line-height:1.55;
+  margin:13px 0;
+  padding:11px 13px;
+}
+.kitchen-session-header>.kitchen-storage-error{grid-column:1/-1;grid-row:2;}
+.kitchen-timer-count{margin-left:auto;font-weight:800;font-size:.75rem;color:#89725e;}
+.kitchen-timer-placeholder{color:#776e64;font-size:.8rem;line-height:1.55;margin:9px 0 17px;}
+.kitchen-timer-stack{display:grid;gap:9px;margin:0 0 18px;}
+.kitchen-active-timer{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto auto;
+  gap:12px;
+  align-items:center;
+  border:1px solid #dfd2c1;
+  border-radius:9px;
+  padding:10px 12px;
+  background:#fffdf8;
+}
+.kitchen-active-timer.is-due{background:#fff0e2;border-color:#cc875d;}
+.kitchen-active-timer-details{min-width:0;display:flex;flex-direction:column;gap:4px;}
+.kitchen-active-timer-details strong{font-size:.83rem;line-height:1.2;overflow-wrap:anywhere;}
+.kitchen-active-timer-details span{font-size:.69rem;color:#827467;font-weight:700;}
+.kitchen-active-timer.is-due .kitchen-active-timer-details span{color:#a34821;}
+.kitchen-active-timer-clock{
+  font-size:1.35rem;
+  font-weight:800;
+  letter-spacing:-.05em;
+  font-variant-numeric:tabular-nums;
+  white-space:nowrap;
+}
+.kitchen-active-timer.is-due .kitchen-active-timer-clock{color:#a34821;}
+.kitchen-active-timer-actions{display:flex;gap:4px;}
+.kitchen-active-timer-actions .icon-button{
+  width:35px;
+  height:35px;
+  min-width:35px;
+  color:#72695f;
+  border:1px solid #e5dbce;
+  background:#fbf5ed;
+  border-radius:7px;
+}
+.kitchen-active-timer-actions .icon-button:focus-visible,
+.kitchen-timer-suggestion:focus-visible{
+  outline:3px solid rgb(216 98 53 / 40%);
+  outline-offset:2px;
+}
+@media(max-width:590px){
+  .kitchen-active-timer{grid-template-columns:minmax(0,1fr) auto;gap:8px;}
+  .kitchen-active-timer-clock{grid-column:1;grid-row:2;justify-self:start;}
+  .kitchen-active-timer-actions{grid-column:2;grid-row:1/3;}
+  .kitchen-active-timer-details{grid-column:1;grid-row:1;}
+}
+@media(prefers-reduced-motion:reduce){
+  .kitchen-progress>div{transition:none;}
+}
