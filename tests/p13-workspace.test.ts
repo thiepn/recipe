@@ -155,6 +155,19 @@ describe('P13 lossless cross-device workspace',()=>{
   expect(await sb.load(record)).toBeNull();
   expect((await bSync.syncOnce()).pushed).toBe(0);
  });
+ it('refuses a server revision rollback rather than clearing local work',async()=>{
+  const record=fixture(),server=new Server();
+  const db=await buildWithRecord(record);
+  const store=mealPlannerStoreFor(db,owner);
+  await store.save(meal(record));
+  const sync=new RecipeWorkspaceSync(db,server.api(),owner);
+  await sync.syncOnce();
+  server.rows.clear();
+  const report=await sync.syncOnce();
+  expect(report.status).toBe('conflict');
+  expect(report.conflicts).toHaveLength(1);
+  expect((await store.load()).entries).toHaveLength(1);
+ });
  it('does not throw away unsynced changes after network errors',async()=>{
   const record=fixture(),db=await buildWithRecord(record);
   await mealPlannerStoreFor(db,owner).save(meal(record));
