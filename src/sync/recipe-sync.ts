@@ -313,11 +313,9 @@ export class RecipeSyncEngine {
             error instanceof RecipeApiError ? error.code : 'SYNC_ERROR',
         });
 
-        await this.#db.putDocument({
-          ...local,
-          syncState: 'error',
-          updatedAt: this.#now(),
-        });
+        await this.#db.markRecipeSyncFailure(
+          this.#accountId, mutation.resourceId, local.localRevision, this.#now(),
+        );
 
         if (disposition.stopCycle) return false;
 
@@ -402,38 +400,16 @@ export class RecipeSyncEngine {
         return false;
       }
 
-      const later = (await this.#db.listResourceOutbox(
+      // Atomically inspect current outbox and local document at commit time.
+      // A new edit may arrive between the canonical fetch and this write.
+      await this.#db.settleRecipeMutation(
         this.#accountId,
         mutation.resourceId,
-      )).filter((row) => row.mutationId !== mutation.mutationId);
-
-      const preserveWorking = later.length > 0;
-      const nextSyncState = later.some((row) => row.state === 'conflict')
-        ? 'conflict'
-        : later.some((row) => row.state === 'quarantined')
-          ? 'error'
-          : preserveWorking
-            ? 'pending'
-            : 'synced';
-      const latestLocal =
-        (await this.#db.getDocument(this.#accountId, mutation.resourceId)) ??
-        local;
-
-      await this.#db.applyMutationSuccess(
-        {
-          ...latestLocal,
-          working: preserveWorking
-            ? latestLocal.working
-            : editableFromRemote(remote),
-          base: remote,
-          serverRevision: result.revision,
-          syncState: nextSyncState,
-          tombstone: preserveWorking
-            ? latestLocal.tombstone
-            : remote.recipe.deletedAt !== null,
-          updatedAt: this.#now(),
-        },
         mutation.mutationId,
+        remote,
+        editableFromRemote(remote),
+        result.revision,
+        this.#now(),
       );
     }
 
