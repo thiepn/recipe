@@ -48,6 +48,7 @@ import { createImportedRecipe, importDuplicateCandidates, type ImportDraft, type
 import { ImportSheet } from './ImportSheet.tsx';
 import { RecipeStudio } from './RecipeStudio.tsx';
 import { CookWorkspace } from './CookWorkspace.tsx';
+import { MealPlanner } from './MealPlanner.tsx';
 import { LunaSheet } from './LunaSheet.tsx';
 import { uiLanguage } from '../ai/contracts.ts';
 import {
@@ -1473,12 +1474,13 @@ export default function App() {
             />
           )}
 
-          {section === 'plan' && (
-            <ComingSoon
-              icon={<ShoppingBasket size={38} />}
-              eyebrow="Planning"
-              title="Recipes first. Planning second."
-              copy="Meal planning and shopping will sit downstream of your cookbook instead of turning Recipe into a generic planner."
+          {section === 'plan' && runtime && (
+            <MealPlanner
+              db={runtime.db}
+              accountId={runtime.accountId}
+              records={activeRecipes}
+              pantry={pantry}
+              onCook={beginCooking}
             />
           )}
         </div>
