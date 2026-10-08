@@ -1482,6 +1482,7 @@ export default function App() {
               pantry={pantry}
               onCook={beginCooking}
               onEdit={editRecipe}
+              onAdd={() => setAddOpen(true)}
             />
           )}
         </div>
