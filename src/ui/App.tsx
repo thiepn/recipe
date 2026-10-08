@@ -47,6 +47,7 @@ import { createBlankRecipe } from '../library/create.ts';
 import { createImportedRecipe, importDuplicateCandidates, type ImportDraft, type ImportKind } from '../import/recipe-import.ts';
 import { ImportSheet } from './ImportSheet.tsx';
 import { RecipeStudio } from './RecipeStudio.tsx';
+import { CookWorkspace } from './CookWorkspace.tsx';
 import { LunaSheet } from './LunaSheet.tsx';
 import { uiLanguage } from '../ai/contracts.ts';
 import {
@@ -472,6 +473,7 @@ function RecipeDetail({
   onFavorite,
   onCollections,
   onEdit,
+  onCook,
   onAsk,
 }: {
   record: LocalRecipeRecord;
@@ -480,6 +482,7 @@ function RecipeDetail({
   onFavorite: () => void;
   onCollections: () => void;
   onEdit: () => void;
+  onCook: () => void;
   onAsk?: (() => void) | undefined;
 }) {
   const recipe = recipeCardFromLocal(record);
@@ -547,7 +550,10 @@ function RecipeDetail({
           )}
 
           <div className="recipe-detail-actions">
-            <button className="button button-primary" onClick={onEdit}>
+            {doc.steps.length>0&&<button className="button button-primary" onClick={onCook}>
+              <ChefHat size={18}/> Start cooking
+            </button>}
+            <button className="button button-secondary" onClick={onEdit}>
               <Pencil size={18}/> Edit recipe
             </button>
             <button className="button button-secondary" onClick={onCollections}>
@@ -673,6 +679,7 @@ export default function App() {
   };
   const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null);
   const [editingRecipeId, setEditingRecipeId] = useState<string | null>(null);
+  const [cookingRecipeId, setCookingRecipeId] = useState<string | null>(null);
   const [collectionRecipeId, setCollectionRecipeId] = useState<string | null>(
     null,
   );
@@ -916,6 +923,11 @@ export default function App() {
   const editingRecipe = editingRecipeId
     ? library.recipes.find((recipe) => recipe.resourceId === editingRecipeId)
     : undefined;
+  const beginCooking = (record: LocalRecipeRecord) => {
+    setSelectedRecipeId(null);
+    setCookingRecipeId(record.resourceId);
+    navigate('cook');
+  };
   const editRecipe = (record: LocalRecipeRecord) => {
     setSelectedRecipeId(null);
     setEditingRecipeId(record.resourceId);
@@ -1450,11 +1462,12 @@ export default function App() {
           )}
 
           {section === 'cook' && (
-            <ComingSoon
-              icon={<ChefHat size={38} />}
-              eyebrow="Cook mode"
-              title="The kitchen-first interface comes next."
-              copy="P3 reserves the destination. Guided steps, timers, mise en place, large touch targets, and live cooking state are intentionally built as their own phase."
+            <CookWorkspace
+              records={activeRecipes}
+              selectedId={cookingRecipeId}
+              onChoose={id=>setCookingRecipeId(id)}
+              onExit={()=>setCookingRecipeId(null)}
+              onEdit={record=>editRecipe(record)}
             />
           )}
 
@@ -1549,6 +1562,7 @@ export default function App() {
           }
           onCollections={() => setCollectionRecipeId(selectedRecipe.resourceId)}
           onEdit={() => editRecipe(selectedRecipe)}
+          onCook={() => beginCooking(selectedRecipe)}
           onAsk={LUNA_ENABLED ? () => openHelp(selectedRecipe) : undefined}
         />
       )}
