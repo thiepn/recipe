@@ -59,6 +59,19 @@ describe('P14 account sign-out data-loss guard', () => {
     expect(await db.countUnsyncedWorkspace(owner)).toBe(1);
   });
 
+  it('never clears the local cache when authentication sign-out fails', async () => {
+    const db = await freshDb();
+    const pantry = { schemaVersion: 1, ingredients: ['carrots'], assumeStaples: false };
+    await db.setMeta(owner, 'pantry-v1', pantry);
+    const auth = {
+      auth: { signOut: async () => ({ error: new Error('provider unavailable') }) },
+    } as unknown as SupabaseClient;
+
+    await expect(signOutRecipe(auth, db, owner, { discardLocalWorkspace: true }))
+      .rejects.toThrow('provider unavailable');
+    expect(await db.getMeta(owner, 'pantry-v1')).toEqual(pantry);
+  });
+
   it('requires a deliberate opt-in before wiping device-only work on sign-out', async () => {
     const db = await freshDb();
     await db.setMeta(owner, 'pantry-v1', { schemaVersion: 1, ingredients: ['potato'], assumeStaples: false });
