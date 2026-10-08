@@ -217,3 +217,14 @@ export class KitchenSessionStore {
     return pending;
   }
 }
+
+/** One queue per live Account/IndexedDB handle keeps in-flight saves ordered
+ * even when navigating away from and back into Cook mode. */
+const kitchenStores=new WeakMap<RecipeLocalDb,Map<string,KitchenSessionStore>>();
+export function kitchenSessionStoreFor(db:RecipeLocalDb,accountId:string):KitchenSessionStore {
+  let accounts=kitchenStores.get(db);
+  if(!accounts){accounts=new Map();kitchenStores.set(db,accounts);}
+  let store=accounts.get(accountId);
+  if(!store){store=new KitchenSessionStore(db,accountId);accounts.set(accountId,store);}
+  return store;
+}

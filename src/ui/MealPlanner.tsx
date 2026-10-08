@@ -50,14 +50,19 @@ export function MealPlanner({records,db,accountId,pantry,onCook,onEdit,onAdd}:Pr
 
   useEffect(()=>{
     let cancelled=false;
-    void store.load().then(value=>{
+    const refresh=()=>void store.load().then(value=>{
       if(cancelled)return;
       planRef.current=value;
       setPlan(value);
     }).catch(()=>{
       if(!cancelled)setError('Your meal plan could not be opened. Check browser storage permissions.');
     });
-    return ()=>{cancelled=true;};
+    refresh();
+    globalThis.addEventListener('recipe:workspace-changed',refresh);
+    return ()=>{
+      cancelled=true;
+      globalThis.removeEventListener('recipe:workspace-changed',refresh);
+    };
   },[store]);
 
   const change=(update:(current:MealPlannerState)=>MealPlannerState)=>{

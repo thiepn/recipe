@@ -6,7 +6,7 @@ import {
 import type { LocalRecipeRecord, RecipeLocalDb } from '../data/local-db.ts';
 import { boundedServings, digitalTimer, kitchenIngredientText, stepProgress } from '../kitchen/model.ts';
 import {
-  KitchenSessionStore, createKitchenSession, dismissKitchenTimer, pauseKitchenTimer,
+  KitchenSessionStore, kitchenSessionStoreFor, createKitchenSession, dismissKitchenTimer, pauseKitchenTimer,
   remainingTimerSeconds, restoreKitchenSession, resumeKitchenTimer,
   startKitchenTimer, timerState, updateKitchenSession, type KitchenSession,
 } from '../kitchen/session.ts';
@@ -22,19 +22,26 @@ interface Props {
 }
 
 export function CookWorkspace({records,selectedId,onChoose,onExit,onEdit,db,accountId}:Props) {
-  const store=useMemo(()=>new KitchenSessionStore(db,accountId),[db,accountId]);
+  const store=useMemo(()=>kitchenSessionStoreFor(db,accountId),[db,accountId]);
   const [savedSessions,setSavedSessions]=useState<KitchenSession[]>([]);
   const [loadingSessions,setLoadingSessions]=useState(true);
   const [storageError,setStorageError]=useState('');
   useEffect(()=>{
     if(selectedId!==null)return;
     let cancelled=false;
-    setLoadingSessions(true);
-    void store.list(records)
-      .then(sessions=>{if(!cancelled){setSavedSessions(sessions);setStorageError('');}})
-      .catch(()=>{if(!cancelled)setStorageError('Saved cooking sessions could not be loaded on this device.');})
-      .finally(()=>{if(!cancelled)setLoadingSessions(false);});
-    return ()=>{cancelled=true;};
+    const refresh=()=>{
+      setLoadingSessions(true);
+      void store.list(records)
+        .then(sessions=>{if(!cancelled){setSavedSessions(sessions);setStorageError('');}})
+        .catch(()=>{if(!cancelled)setStorageError('Saved cooking sessions could not be loaded on this device.');})
+        .finally(()=>{if(!cancelled)setLoadingSessions(false);});
+    };
+    refresh();
+    globalThis.addEventListener('recipe:workspace-changed',refresh);
+    return ()=>{
+      cancelled=true;
+      globalThis.removeEventListener('recipe:workspace-changed',refresh);
+    };
   },[store,records,selectedId]);
   const selected=records.find(r=>r.resourceId===selectedId);
   if(selected)return <CookSession key={selected.resourceId} record={selected} store={store} onExit={onExit}/>;
@@ -112,6 +119,20 @@ function CookSession({record,onExit,store}: {
     })();
     return ()=>{cancelled=true;};
   },[store,record.resourceId]);
+  useEffect(()=>{
+    let cancelled=false;
+    const refresh=()=>void store.load(record).then(value=>{
+      if(cancelled)return;
+      // A remote tombstone resets the visible session without resurrecting it
+      // in IndexedDB until the user deliberately makes a new cooking edit.
+      const current=value??createKitchenSession(doc);
+      sessionRef.current=current;
+      setSession(current);
+    }).catch(()=>setStorageError('Could not refresh this cooking session.'));
+    globalThis.addEventListener('recipe:workspace-changed',refresh);
+    return ()=>{cancelled=true;globalThis.removeEventListener('recipe:workspace-changed',refresh);};
+  },[store,record.resourceId]);
+
   const change=useCallback((transform:(current:KitchenSession)=>KitchenSession)=>{
     const current=sessionRef.current;
     if(!current)return;

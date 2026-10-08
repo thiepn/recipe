@@ -11,6 +11,10 @@ import {
   type RecipeMutation,
 } from './protocol.ts';
 import {
+  workspaceListResponseSchema,workspaceMutationResponseSchema,workspaceMutationInputSchema,
+  type WorkspaceKind,
+} from '../workspace/contracts.ts';
+import {
   lunaDraftSchema,lunaHelpSchema,
   generateInputSchema,extractInputSchema,helpInputSchema,
   type GenerateInput,type ExtractInput,type HelpInput,
@@ -244,4 +248,19 @@ export class RecipeCoreApi {
     );
   }
 
+  workspaceList() {
+    return this.#request('/v1/recipe/workspace','GET',workspaceListResponseSchema);
+  }
+
+  workspaceApply(input:{
+    kind:WorkspaceKind;
+    resourceKey:string;
+    baseRevision:number;
+    document:unknown|null;
+  }) {
+    return this.#request(
+      '/v1/recipe/workspace/mutations','POST',workspaceMutationResponseSchema,
+      workspaceMutationInputSchema.parse(input),
+    );
+  }
 }
