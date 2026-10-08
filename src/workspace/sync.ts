@@ -1,0 +1,187 @@
+import { z } from 'zod';
+import type { RecipeCoreApi } from '../api/core.ts';
+import type { RecipeLocalDb, LocalRecipeRecord } from '../data/local-db.ts';
+import { mealPlannerSchema, mealPlannerStoreFor } from '../planning/model.ts';
+import { kitchenSessionSchema, kitchenSessionStoreFor } from '../kitchen/session.ts';
+import {
+  workspaceKey, type WorkspaceKind, type WorkspaceRemote,
+} from './contracts.ts';
+
+export interface WorkspaceConflict {
+  kind: WorkspaceKind;
+  resourceKey: string;
+  local: unknown | null;
+  remote: unknown | null;
+  remoteRevision: number;
+}
+export type WorkspaceSyncResult={
+  status:'synced'|'conflict';
+  pulled:number;
+  pushed:number;
+  conflicts:WorkspaceConflict[];
+};
+
+const baseSchema=z.object({
+  revision:z.number().int().nonnegative(),
+  document:z.unknown().nullable(),
+}).strict();
+type Base=z.infer<typeof baseSchema>;
+const metaBase=(kind:WorkspaceKind,key:string)=>
+  `workspace-base-v1:${workspaceKey(kind,key)}`;
+const localKey=(kind:WorkspaceKind,key:string)=>
+  kind==='plan'?'meal-plan-v1':`kitchen-session-v1:${key}`;
+
+// JSONB normalizes object member order. Do not interpret key-order changes as edits.
+export function canonicalJson(value:unknown):string {
+  if(value===undefined)return 'null';
+  if(value===null || typeof value!=='object')return JSON.stringify(value);
+  if(Array.isArray(value))return `[${value.map(canonicalJson).join(',')}]`;
+  const obj=value as Record<string,unknown>;
+  return `{${Object.keys(obj).sort()
+    .filter(key=>obj[key]!==undefined)
+    .map(key=>`${JSON.stringify(key)}:${canonicalJson(obj[key])}`).join(',')}}`;
+}
+const same=(a:unknown,b:unknown)=>canonicalJson(a)===canonicalJson(b);
+
+/**
+ * Cloud continuity sits alongside existing local-first stores. Nothing is
+ * uploaded without enabling the client flag and a qualified Core endpoint.
+ * Local edits are never overwritten when server and device both changed.
+ */
+export class RecipeWorkspaceSync {
+  readonly #db:RecipeLocalDb;
+  readonly #api:Pick<RecipeCoreApi,'workspaceList'|'workspaceApply'>;
+  readonly #accountId:string;
+  #running:Promise<WorkspaceSyncResult>|null=null;
+
+  constructor(db:RecipeLocalDb,api:Pick<RecipeCoreApi,'workspaceList'|'workspaceApply'>,accountId:string){
+    this.#db=db;this.#api=api;this.#accountId=accountId;
+  }
+
+  async #readLocal(kind:WorkspaceKind,key:string,record?:LocalRecipeRecord):Promise<unknown|null>{
+    const rawKey=localKey(kind,key);
+    if(kind==='plan'){
+      // Wait until queued edits from the Plan page have reached IndexedDB.
+      await mealPlannerStoreFor(this.#db,this.#accountId).load();
+    }else if(record){
+      await kitchenSessionStoreFor(this.#db,this.#accountId).load(record);
+    }
+    const raw=await this.#db.getMeta<unknown>(this.#accountId,rawKey);
+    if(raw===undefined||raw===null)return null;
+    const parsed=(kind==='plan'?mealPlannerSchema:kitchenSessionSchema).safeParse(raw);
+    if(!parsed.success)throw new Error('Invalid local Recipe workspace data; refusing cloud overwrite');
+    return parsed.data;
+  }
+
+  async #writeLocal(kind:WorkspaceKind,key:string,value:unknown|null):Promise<void>{
+    if(kind==='plan'){
+      const store=mealPlannerStoreFor(this.#db,this.#accountId);
+      if(value===null)await store.clear();
+      else await store.save(mealPlannerSchema.parse(value));
+    }else{
+      const store=kitchenSessionStoreFor(this.#db,this.#accountId);
+      if(value===null)await store.clear(key);
+      else await store.save(kitchenSessionSchema.parse(value));
+    }
+  }
+
+  async #base(kind:WorkspaceKind,key:string):Promise<Base|null>{
+    const raw=await this.#db.getMeta<unknown>(this.#accountId,metaBase(kind,key));
+    return baseSchema.safeParse(raw).data??null;
+  }
+  async #saveBase(kind:WorkspaceKind,key:string,revision:number,document:unknown|null){
+    await this.#db.setMeta(this.#accountId,metaBase(kind,key),{revision,document});
+  }
+
+  syncOnce():Promise<WorkspaceSyncResult>{
+    if(this.#running)return this.#running;
+    this.#running=this.#sync().finally(()=>{this.#running=null;});
+    return this.#running;
+  }
+
+  async #sync():Promise<WorkspaceSyncResult>{
+    const remote=await this.#api.workspaceList();
+    const remoteMap=new Map<string,WorkspaceRemote>(
+      remote.documents.map(row=>[workspaceKey(row.kind,row.resourceKey),row]),
+    );
+    const records=await this.#db.listDocuments(this.#accountId);
+    const byRecipe=new Map(records.filter(row=>!row.tombstone).map(row=>[row.resourceId,row]));
+    const keys:[WorkspaceKind,string][]=[['plan','main']];
+    for(const recipeId of byRecipe.keys())keys.push(['session',recipeId]);
+    const conflicts:WorkspaceConflict[]=[];
+    let pulled=0,pushed=0;
+
+    for(const [kind,key] of keys){
+      const record=kind==='session'?byRecipe.get(key):undefined;
+      const server=remoteMap.get(workspaceKey(kind,key));
+      const remoteRev=server?.revision??0;
+      const remoteDoc=server?.document??null;
+      const local=await this.#readLocal(kind,key,record);
+      const base=await this.#base(kind,key);
+      const baseRev=base?.revision??0;
+      const previouslySynced=base!==null;
+      const localDirty=previouslySynced?!same(local,base.document):local!==null;
+
+      if(!localDirty){
+        if(remoteRev===baseRev && (previouslySynced||remoteRev===0))continue;
+        // Do not replace a local edit made while the remote request was in flight.
+        if(!same(await this.#readLocal(kind,key,record),local))continue;
+        await this.#writeLocal(kind,key,remoteDoc);
+        await this.#saveBase(kind,key,remoteRev,remoteDoc);
+        pulled++;
+        continue;
+      }
+
+      if(remoteRev!==baseRev || (!previouslySynced&&remoteRev>0)){
+        if(same(local,remoteDoc)){
+          await this.#saveBase(kind,key,remoteRev,remoteDoc);
+          continue;
+        }
+        conflicts.push({kind,resourceKey:key,local,remote:remoteDoc,remoteRevision:remoteRev});
+        continue;
+      }
+
+      const response=await this.#api.workspaceApply({
+        kind,resourceKey:key,baseRevision:baseRev,document:local,
+      });
+      if(response.status==='conflict'){
+        if(same(local,response.document)){
+          await this.#saveBase(kind,key,response.revision,response.document);
+        }else{
+          conflicts.push({
+            kind,resourceKey:key,local,remote:response.document,
+            remoteRevision:response.revision,
+          });
+        }
+      }else{
+        // Keep any new local edits; acknowledgement records the submitted version.
+        await this.#saveBase(kind,key,response.revision,local);
+        pushed++;
+      }
+    }
+    return {status:conflicts.length?'conflict':'synced',pulled,pushed,conflicts};
+  }
+
+  async resolve(conflict:WorkspaceConflict,choice:'keep-local'|'use-cloud'):Promise<void>{
+    const key=workspaceKey(conflict.kind,conflict.resourceKey);
+    if(!key)throw new Error('Missing resource');
+    const existing=await this.#base(conflict.kind,conflict.resourceKey);
+    if(existing && existing.revision>conflict.remoteRevision)
+      throw new Error('Cloud revision has changed. Sync again before resolving.');
+    if(choice==='use-cloud'){
+      // Only explicit user consent permits destructive local replacement.
+      await this.#writeLocal(conflict.kind,conflict.resourceKey,conflict.remote);
+    }else{
+      // If the local state has since changed, retain the freshest device edit.
+      // Setting the server revision as base schedules it for a CAS push.
+      const current=await this.#readLocal(conflict.kind,conflict.resourceKey);
+      if(same(current,conflict.remote)){
+        await this.#saveBase(conflict.kind,conflict.resourceKey,
+          conflict.remoteRevision,conflict.remote);
+        return;
+      }
+    }
+    await this.#saveBase(conflict.kind,conflict.resourceKey,
+      conflict.remoteRevision,conflict.remote);
+  }
+}
