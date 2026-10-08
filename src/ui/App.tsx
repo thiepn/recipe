@@ -15,6 +15,7 @@ import {
   LogOut,
   Menu,
   MoreHorizontal,
+  Pencil,
   Plus,
   Search,
   ShoppingBasket,
@@ -45,6 +46,7 @@ import {
 import { createBlankRecipe } from '../library/create.ts';
 import { createImportedRecipe, importDuplicateCandidates, type ImportDraft, type ImportKind } from '../import/recipe-import.ts';
 import { ImportSheet } from './ImportSheet.tsx';
+import { RecipeStudio } from './RecipeStudio.tsx';
 import { LunaSheet } from './LunaSheet.tsx';
 import { uiLanguage } from '../ai/contracts.ts';
 import {
@@ -469,6 +471,7 @@ function RecipeDetail({
   onClose,
   onFavorite,
   onCollections,
+  onEdit,
   onAsk,
 }: {
   record: LocalRecipeRecord;
@@ -476,6 +479,7 @@ function RecipeDetail({
   onClose: () => void;
   onFavorite: () => void;
   onCollections: () => void;
+  onEdit: () => void;
   onAsk?: (() => void) | undefined;
 }) {
   const recipe = recipeCardFromLocal(record);
@@ -543,6 +547,9 @@ function RecipeDetail({
           )}
 
           <div className="recipe-detail-actions">
+            <button className="button button-primary" onClick={onEdit}>
+              <Pencil size={18}/> Edit recipe
+            </button>
             <button className="button button-secondary" onClick={onCollections}>
               <FolderHeart size={18} /> Organize
             </button>
@@ -558,7 +565,7 @@ function RecipeDetail({
             </div>
             {doc.ingredients.length === 0 ? (
               <p className="detail-empty">
-                No ingredients yet. This draft is ready for the recipe editor.
+                No ingredients yet. Choose Edit recipe to add them.
               </p>
             ) : (
               <ul className="ingredient-list">
@@ -588,7 +595,7 @@ function RecipeDetail({
             </div>
             {doc.steps.length === 0 ? (
               <p className="detail-empty">
-                No cooking steps yet. Guided recipe authoring is the next phase.
+                No cooking steps yet. Choose Edit recipe to write them.
               </p>
             ) : (
               <ol className="step-list">
@@ -665,6 +672,7 @@ export default function App() {
     setImportOpen(true);
   };
   const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null);
+  const [editingRecipeId, setEditingRecipeId] = useState<string | null>(null);
   const [collectionRecipeId, setCollectionRecipeId] = useState<string | null>(
     null,
   );
@@ -905,6 +913,17 @@ export default function App() {
   const selectedRecipe = selectedRecipeId
     ? library.recipes.find((recipe) => recipe.resourceId === selectedRecipeId)
     : undefined;
+  const editingRecipe = editingRecipeId
+    ? library.recipes.find((recipe) => recipe.resourceId === editingRecipeId)
+    : undefined;
+  const editRecipe = (record: LocalRecipeRecord) => {
+    setSelectedRecipeId(null);
+    setEditingRecipeId(record.resourceId);
+  };
+  const closeStudio = () => {
+    if(editingRecipeId) setSelectedRecipeId(editingRecipeId);
+    setEditingRecipeId(null);
+  };
   const editableBook =
     library.collectionBook?.working ?? EMPTY_COLLECTION_BOOK;
 
@@ -1529,7 +1548,20 @@ export default function App() {
             }))
           }
           onCollections={() => setCollectionRecipeId(selectedRecipe.resourceId)}
+          onEdit={() => editRecipe(selectedRecipe)}
           onAsk={LUNA_ENABLED ? () => openHelp(selectedRecipe) : undefined}
+        />
+      )}
+
+      {editingRecipe && (
+        <RecipeStudio
+          key={editingRecipe.resourceId}
+          record={editingRecipe}
+          onClose={closeStudio}
+          onSave={async document => {
+            await updateRecipe(editingRecipe, () => document);
+            setToast('Recipe saved to your cookbook.');
+          }}
         />
       )}
 
