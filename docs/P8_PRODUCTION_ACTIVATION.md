@@ -30,12 +30,15 @@ Vercel's generic documentation shows `cname.vercel-dns-0.com` as a common subdom
 
 ## Blocker 2: Recipe AI app identity and Gateway secrets
 
-P8 requires an **independently generated 32+ character secret** that must be configured in two server-only places:
+P8 requires an **independently generated 32+ character secret** used by the two server-only components. The secure code plumbing is now **merged** in the shared AI and Core repositories:
 
-- AI production configuration: register a `recipe` signing identity in `THIEPN_AI_APP_SECRETS_JSON` on the `ai` project. **Merge** this entry into existing Languages and Finance identities; do not replace the JSON map and break those apps.
-- Core Gateway deploy: add encrypted GitHub Actions secret `THIEPN_AI_RECIPE_SECRET` for the Core production deployment. Update `deploy-gateway.yml` and `scripts/deploy-gateway.ts` to pass the server-only binding into Cloudflare Worker deployment. The code already rejects missing Recipe secrets with controlled 503.
+- **AI production Vercel project:** create a sensitive/encrypted environment variable named `THIEPN_AI_RECIPE_SECRET`. The THIEPN AI service now accepts this **separate** Recipe-specific secret and automatically combines it with existing Languages/Finance credentials. **Do not edit or replace `THIEPN_AI_APP_SECRETS_JSON`.**
+- **Core GitHub repository → Settings → Secrets and variables → Actions:** add `THIEPN_AI_RECIPE_SECRET` as a production environment secret (the deploy workflow uses environment `production`). Paste the *same* secret as the AI project, without printing it to a console or storing it in a GitHub source file. The merged production deploy workflow passes the secret through an ephemeral mode-0600 secrets file into Cloudflare.
+- Rebuild/redeploy the AI service after configuring its environment. Redeploy Core through its existing controlled deploy workflow only after DNS resolution is healthy.
 
-These sensitive values must **never** be put in repository files, the browser, `VITE_*`, ChatGPT messages, or logs. Only the same secret is shared server-to-server. The current GitHub deployment logs also show `THIEPN_AI_FINANCE_SECRET` empty, which separately blocks the Finance AI part of the existing full smoke script. Do not mislabel a worker upload as a passing whole-system smoke.
+Never use `VITE_*`, public repo files, or ChatGPT text for the value. The Core AI route fails closed with 503 while the secret is missing. Missing credentials should remain a deployment blocker, not a reason to weaken authentication.
+
+The current Core deploy workflow also has an **unrelated** `THIEPN_AI_FINANCE_SECRET` that was empty in the 2026-10-08 run. Its full smoke script checks Languages and Finance; fixing Recipe alone does not complete that all-product acceptance test. Do not present a successful Worker upload as a fully passing smoke test.
 
 ## Blocker 3: Account OAuth allowlist and signed-in smoke
 
