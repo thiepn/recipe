@@ -48,6 +48,7 @@ import { createImportedRecipe, importDuplicateCandidates, type ImportDraft, type
 import { ImportSheet } from './ImportSheet.tsx';
 import { RecipeStudio } from './RecipeStudio.tsx';
 import { CookWorkspace } from './CookWorkspace.tsx';
+import { RecipeWorkspaceSync, type WorkspaceConflict } from '../workspace/sync.ts';
 import { MealPlanner } from './MealPlanner.tsx';
 import { LunaSheet } from './LunaSheet.tsx';
 import { uiLanguage } from '../ai/contracts.ts';
@@ -84,6 +85,7 @@ interface Runtime {
   api: RecipeCoreApi;
   recipeSync: RecipeSyncEngine;
   collectionSync: CollectionSyncEngine;
+  workspaceSync: RecipeWorkspaceSync | null;
   authClient: ReturnType<typeof createRecipeAuthClient>;
 }
 
@@ -95,6 +97,7 @@ interface LibraryState {
 }
 
 const LUNA_ENABLED = import.meta.env.VITE_RECIPE_LUNA_ENABLED === 'staged-v1';
+const WORKSPACE_SYNC_ENABLED = import.meta.env.VITE_RECIPE_WORKSPACE_SYNC === 'qualified-v1';
 
 const EMPTY_LIBRARY: LibraryState = {
   recipes: [],
@@ -689,6 +692,11 @@ export default function App() {
   >(null);
   const [toast, setToast] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [workspaceConflicts, setWorkspaceConflicts] = useState<WorkspaceConflict[]>([]);
+  const [workspaceStatus, setWorkspaceStatus] = useState<'disabled'|'ready'|'offline'|'conflict'>(
+    WORKSPACE_SYNC_ENABLED?'offline':'disabled'
+  );
+  const [resolvingWorkspace, setResolvingWorkspace] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
   const [pantry, setPantry] = useState<PantryDocument>(EMPTY_PANTRY);
   const [pantryText, setPantryText] = useState('');
@@ -768,6 +776,18 @@ export default function App() {
           activeRuntime.recipeSync.syncOnce(),
           activeRuntime.collectionSync.syncOnce(),
         ]);
+        if(activeRuntime.workspaceSync){
+          try{
+            const report=await activeRuntime.workspaceSync.syncOnce();
+            setWorkspaceConflicts(report.conflicts);
+            setWorkspaceStatus(report.conflicts.length?'conflict':'ready');
+            if(report.pulled>0)
+              globalThis.dispatchEvent(new Event('recipe:workspace-changed'));
+          }catch{
+            setWorkspaceStatus('offline');
+            setToast('Recipe workspace cloud is unavailable. Local edits are retained.');
+          }
+        }
         await reload(activeRuntime);
       } catch {
         setToast('Cloud sync is unavailable. Local changes remain safe.');
@@ -830,6 +850,8 @@ export default function App() {
           api,
           recipeSync,
           collectionSync,
+          workspaceSync:WORKSPACE_SYNC_ENABLED?
+            new RecipeWorkspaceSync(db,api,identity.userId):null,
           authClient,
         };
 
@@ -848,7 +870,21 @@ export default function App() {
           recipeSync.syncOnce(),
           collectionSync.syncOnce(),
         ])
-          .then(() => reload(nextRuntime))
+          .then(async()=>{
+            if(nextRuntime.workspaceSync){
+              try{
+                const result=await nextRuntime.workspaceSync.syncOnce();
+                if(!cancelled){
+                  setWorkspaceConflicts(result.conflicts);
+                  setWorkspaceStatus(result.conflicts.length?'conflict':'ready');
+                  if(result.pulled>0)globalThis.dispatchEvent(new Event('recipe:workspace-changed'));
+                }
+              }catch{
+                if(!cancelled)setWorkspaceStatus('offline');
+              }
+            }
+            if(!cancelled)await reload(nextRuntime);
+          })
           .catch(() => undefined);
       } catch (error) {
         if (!cancelled) {
@@ -879,10 +915,13 @@ export default function App() {
     if (!runtime) return;
     const onOnline = () => void sync(runtime);
     globalThis.addEventListener('online', onOnline);
-    const timer = globalThis.setInterval(() => void sync(runtime), 60_000);
+    const timer = globalThis.setInterval(() => void sync(runtime), 30_000);
+    const onFocus=()=>{if(document.visibilityState==='visible')void sync(runtime);};
+    document.addEventListener('visibilitychange',onFocus);
     return () => {
       globalThis.removeEventListener('online', onOnline);
       globalThis.clearInterval(timer);
+      document.removeEventListener('visibilitychange',onFocus);
     };
   }, [runtime, sync]);
 
@@ -1064,7 +1103,10 @@ export default function App() {
             title="Sync now"
           >
             {navigator.onLine ? <Cloud size={17} /> : <WifiOff size={17} />}
-            <span>{syncing ? 'Syncing…' : navigator.onLine ? 'Synced locally' : 'Offline'}</span>
+            <span>{syncing?'Syncing…':!navigator.onLine?'Offline':
+              workspaceStatus==='conflict'?'Workspace conflict':
+              workspaceStatus==='ready'?'Workspace synced':
+              workspaceStatus==='offline'?'Cloud unavailable':'Saved locally'}</span>
           </button>
           {(library.recipeConflicts + library.collectionConflicts > 0) && (
             <span className="attention-row">
@@ -1609,6 +1651,48 @@ export default function App() {
         />
       )}
 
+      {workspaceConflicts.length>0&&runtime?.workspaceSync&&(
+        <section className="workspace-conflicts" role="alert" aria-label="Recipe sync conflicts">
+          <div className="workspace-conflict-heading">
+            <CircleAlert size={19}/>
+            <div><strong>Choose which version to keep</strong>
+              <p>Changes from another device conflict with this device. No version has been overwritten.</p>
+            </div>
+          </div>
+          {workspaceConflicts.map(conflict=>(
+            <div className="workspace-conflict-row" key={conflict.kind+conflict.resourceKey}>
+              <strong>{conflict.kind==='plan'?'Meal plan':(
+                library.recipes.find(r=>r.resourceId===conflict.resourceKey)?.working.version.title||'Cooking session'
+              )}</strong>
+              <div>
+                <button className="button button-secondary" type="button" disabled={resolvingWorkspace}
+                  onClick={async()=>{
+                    if(!runtime.workspaceSync)return;
+                    setResolvingWorkspace(true);
+                    try{
+                      await runtime.workspaceSync.resolve(conflict,'use-cloud');
+                      setWorkspaceConflicts(current=>current.filter(c=>c!==conflict));
+                      globalThis.dispatchEvent(new Event('recipe:workspace-changed'));
+                      void sync(runtime);
+                    }catch{setToast('Resolution failed. Your local data remains unchanged.');}
+                    finally{setResolvingWorkspace(false);}
+                  }}>Use cloud version</button>
+                <button className="button button-primary" type="button" disabled={resolvingWorkspace}
+                  onClick={async()=>{
+                    if(!runtime.workspaceSync)return;
+                    setResolvingWorkspace(true);
+                    try{
+                      await runtime.workspaceSync.resolve(conflict,'keep-local');
+                      setWorkspaceConflicts(current=>current.filter(c=>c!==conflict));
+                      void sync(runtime);
+                    }catch{setToast('Resolution failed. Your local data remains unchanged.');}
+                    finally{setResolvingWorkspace(false);}
+                  }}>Keep this device</button>
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
       {toast && (
         <button className="toast" type="button" onClick={() => setToast(null)}>
           {toast}
