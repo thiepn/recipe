@@ -171,9 +171,13 @@ export async function signOutRecipe(
   if (workspacePending > 0 && !options.discardLocalWorkspace)
     throw new UnsyncedWorkspaceError(workspacePending);
 
-  await localDb.wipeAccount(accountId);
-  await clearRecipeMediaCache(accountId);
-
+  // Never erase account-scoped IndexedDB while an active auth session remains.
+  // A failed local sign-out must leave recoverable recipes and workspace data.
   const { error } = await client.auth.signOut({ scope: 'local' });
   if (error) throw error;
+
+  // If cleanup fails, the auth session is already closed and owner-scoped data
+  // remains locally recoverable after the same Account signs in again.
+  await localDb.wipeAccount(accountId);
+  await clearRecipeMediaCache(accountId);
 }
