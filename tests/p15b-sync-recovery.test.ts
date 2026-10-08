@@ -13,6 +13,8 @@ import {
   type RecipeEditableDocument,
 } from '../src/api/protocol.ts';
 import { createBlankRecipe } from '../src/library/create.ts';
+import { RecipeApiError } from '../src/api/core.ts';
+import { isRetryableSyncFailure } from '../src/sync/retry.ts';
 
 const owner = '11111111-1111-4111-8111-111111111111';
 const mutationOne = '33333333-3333-4333-8333-333333333333';
@@ -242,5 +244,25 @@ describe('P15B atomic collection recovery', () => {
     expect((await db.getCollectionBook(owner))?.syncState).toBe('pending');
     expect((await db.listCollectionOutbox(owner)).map(row => row.mutationId))
       .toEqual([mutationTwo]);
+  });
+});
+
+describe('P15B retry disposition', () => {
+  it.each([0, 401, 403, 408, 425, 429, 500, 503])(
+    'keeps HTTP %i failures retryable',
+    status => expect(isRetryableSyncFailure(
+      new RecipeApiError('TEMPORARY', status, 'test', 'retry later'),
+    )).toBe(true),
+  );
+
+  it.each([400, 404, 409, 422])(
+    'quarantines permanent HTTP %i errors',
+    status => expect(isRetryableSyncFailure(
+      new RecipeApiError('BAD_INPUT', status, 'test', 'invalid'),
+    )).toBe(false),
+  );
+
+  it('treats unknown browser failures as retryable rather than losing edits', () => {
+    expect(isRetryableSyncFailure(new TypeError('Network failed'))).toBe(true);
   });
 });
