@@ -28,7 +28,7 @@ import {
 import {
   createRecipeAuthClient,
   getRecipeAccessToken,
-  getVerifiedRecipeIdentity,
+  getStartupRecipeIdentity,
   handleRecipeAuthCallback,
   signInWithGoogle,
   signOutRecipe,
@@ -823,10 +823,11 @@ export default function App() {
           setSection(initialSection());
         }
 
-        let identity;
-        try {
-          identity = await getVerifiedRecipeIdentity(authClient);
-        } catch {
+        // Only absence of a saved session means signed out. Network, token
+        // refresh and Account verification failures must remain recoverable
+        // startup errors instead of incorrectly prompting for Google login.
+        const identity = await getStartupRecipeIdentity(authClient);
+        if (!identity) {
           if (!cancelled) setBootState('signed-out');
           return;
         }
@@ -1030,9 +1031,12 @@ export default function App() {
     return (
       <main className="boot-screen">
         <div className="brand-mark warning"><CircleAlert size={26} /></div>
-        <h1>Recipe is not configured yet.</h1>
+        <h1>Could not open Recipe</h1>
         <p>{bootError}</p>
-        <small>Set the Account and Core environment variables before launch.</small>
+        <p className="auth-copy">Your saved recipes remain on this device. Check your connection and try again. If this persists, verify the Account and Core configuration.</p>
+        <button className="button button-primary" type="button" onClick={() => globalThis.location.reload()}>
+          Retry opening Recipe
+        </button>
       </main>
     );
   }
