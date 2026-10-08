@@ -667,11 +667,26 @@ export class RecipeLocalDb {
       [STORES.documents, STORES.conflicts, STORES.meta],
       'readwrite',
     );
+    const done = transactionDone(tx);
     const documentStore = tx.objectStore(STORES.documents);
     const conflictStore = tx.objectStore(STORES.conflicts);
     for (const document of documents) {
-      if (document.accountId !== accountId)
+      if (document.accountId !== accountId) {
+        tx.abort();
+        void done.catch(() => undefined);
         throw new Error('Pulled document ownership mismatch');
+      }
+      const latest = (await requestResult(
+        documentStore.get([accountId, document.resourceId]),
+      )) as LocalRecipeRecord | undefined;
+      // A user edit committed after the remote response was prepared.
+      // Abort the *entire* page (including cursor), so the next sync retries.
+      if (latest && (latest.localRevision !== document.localRevision ||
+          (latest.syncState === 'pending' && document.syncState === 'synced'))) {
+        tx.abort();
+        void done.catch(() => undefined);
+        throw new Error('Local recipe changed while applying cloud updates; retry sync');
+      }
       documentStore.put(document);
     }
     for (const conflict of conflicts) {
@@ -684,7 +699,7 @@ export class RecipeLocalDb {
       key: 'cursor',
       value: nextCursor,
     } satisfies MetaRecord);
-    await transactionDone(tx);
+    await done;
   }
 
   async wipeAccount(accountId: string): Promise<void> {
