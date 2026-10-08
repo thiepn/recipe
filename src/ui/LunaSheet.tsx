@@ -8,7 +8,7 @@ type SaveResult='saved'|'duplicate';
 interface Props {
  open:boolean;
  mode:SuggestionMode;
- title?:string;
+ title?:string|undefined;
  onClose:()=>void;
  onGenerate:(request:string,avoid:string[],servings:number)=>Promise<LunaDraft>;
  onHelp:(question:string)=>Promise<LunaHelp>;
