@@ -3007,7 +3007,7 @@ body {
 /* P12 — Meal planning as a warm editorial notebook with a grocery slip. */
 .meal-planner{max-width:1350px;margin:auto;}
 .planner-head{display:flex;align-items:end;justify-content:space-between;gap:30px;margin-bottom:26px;}
-.planner-head h1{font:600 clamp(2.25rem,4vw,3.7rem)/1.1 Georgia,'Times New Roman',serif;letter-spacing:-.045em;margin:0 0 9px;}
+.planner-head h1{font:600 clamp(1.7rem,3vw,2.35rem)/1.15 Georgia,'Times New Roman',serif;letter-spacing:-.03em;margin:0 0 6px;}
 .planner-head p:last-child{color:var(--muted);font-size:.89rem;line-height:1.6;margin:0;max-width:560px;}
 .planner-shop-jump{flex:none;display:inline-flex;align-items:center;gap:9px;border:1px solid #d9c9b9;border-radius:8px;background:#fffcf6;padding:11px 14px;font-weight:800;font-size:.8rem;}
 .planner-shop-jump span{display:grid;place-items:center;min-width:21px;height:21px;border-radius:50%;background:#e8d2bb;color:#8d5531;font-size:.67rem;}
