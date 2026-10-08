@@ -90,6 +90,8 @@ interface LibraryState {
   collectionConflicts: number;
 }
 
+const LUNA_ENABLED = import.meta.env.VITE_RECIPE_LUNA_ENABLED === 'staged-v1';
+
 const EMPTY_LIBRARY: LibraryState = {
   recipes: [],
   collectionBook: undefined,
@@ -296,7 +298,7 @@ function AddSheet({
   onClose: () => void;
   onCreate: (title: string) => Promise<void>;
   onImport: (kind: ImportKind) => void;
-  onGenerate: () => void;
+  onGenerate?: (() => void) | undefined;
 }) {
   const [title, setTitle] = useState('');
   const [saving, setSaving] = useState(false);
@@ -349,10 +351,10 @@ function AddSheet({
             <TimerReset size={22} />
             <span><strong>Paste recipe text</strong><small>Ingredients and steps</small></span>
           </button>
-          <button className="capture-option is-ready" type="button" onClick={onGenerate}>
+          {onGenerate && <button className="capture-option is-ready" type="button" onClick={onGenerate}>
             <Sparkles size={22} />
             <span><strong>Suggest with Luna</strong><small>Optional AI · review before saving</small></span>
-          </button>
+          </button>}
         </div>
         <form
           className="blank-recipe-form"
@@ -474,7 +476,7 @@ function RecipeDetail({
   onClose: () => void;
   onFavorite: () => void;
   onCollections: () => void;
-  onAsk: () => void;
+  onAsk?: (() => void) | undefined;
 }) {
   const recipe = recipeCardFromLocal(record);
   const doc = record.working;
@@ -544,9 +546,9 @@ function RecipeDetail({
             <button className="button button-secondary" onClick={onCollections}>
               <FolderHeart size={18} /> Organize
             </button>
-            <button className="button button-secondary" onClick={onAsk}>
+            {onAsk && <button className="button button-secondary" onClick={onAsk}>
               <Sparkles size={18}/> Ask Luna
-            </button>
+            </button>}
           </div>
 
           <section className="detail-section">
@@ -1470,21 +1472,21 @@ export default function App() {
           void sync(runtime);
         }}
         onImport={openImporter}
-        onGenerate={openGenerate}
+        onGenerate={LUNA_ENABLED ? openGenerate : undefined}
       />
       <ImportSheet
         open={importOpen}
         initialMode={importMode}
         onClose={() => setImportOpen(false)}
         onSave={saveImportedDraft}
-        onLunaExtract={async (sourceText,sourceKind) => {
+        onLunaExtract={LUNA_ENABLED ? async (sourceText,sourceKind) => {
           if (!runtime) throw new Error('Sign in to use Luna.');
           return runtime.api.lunaExtract({
             sourceText,sourceKind,language:uiLanguage(navigator.language),
           });
-        }}
+        } : undefined}
       />
-      <LunaSheet
+      {LUNA_ENABLED && <LunaSheet
         open={lunaOpen}
         mode={lunaMode}
         title={lunaRecipeContext?.working.version.title}
@@ -1510,7 +1512,7 @@ export default function App() {
           });
         }}
         onSave={saveImportedDraft}
-      />
+      />}
 
       {selectedRecipe && (
         <RecipeDetail
@@ -1527,7 +1529,7 @@ export default function App() {
             }))
           }
           onCollections={() => setCollectionRecipeId(selectedRecipe.resourceId)}
-          onAsk={() => openHelp(selectedRecipe)}
+          onAsk={LUNA_ENABLED ? () => openHelp(selectedRecipe) : undefined}
         />
       )}
 
