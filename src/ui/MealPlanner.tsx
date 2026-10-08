@@ -5,7 +5,7 @@ import {
 import type { LocalRecipeRecord, RecipeLocalDb } from '../data/local-db.ts';
 import type { PantryDocument } from '../library/ingredients.ts';
 import {
-  MEAL_SLOTS, MealPlannerStore, addDays, addManualItem, amountLabel, assignMeal,
+  MEAL_SLOTS, mealPlannerStoreFor, addDays, addManualItem, amountLabel, assignMeal,
   localToday, mondayOf, removeManualItem, shoppingRows, shoppingText, toggleManualItem,
   togglePurchased, weekDays, type MealPlannerState, type MealSlot,
 } from '../planning/model.ts';
@@ -33,7 +33,7 @@ function slotLabel(slot:MealSlot):string {
 }
 
 export function MealPlanner({records,db,accountId,pantry,onCook,onEdit}:Props) {
-  const store=useMemo(()=>new MealPlannerStore(db,accountId),[db,accountId]);
+  const store=useMemo(()=>mealPlannerStoreFor(db,accountId),[db,accountId]);
   const [plan,setPlan]=useState<MealPlannerState|null>(null);
   const planRef=useRef<MealPlannerState|null>(null);
   const [week,setWeek]=useState(()=>mondayOf(localToday()));
@@ -79,7 +79,7 @@ export function MealPlanner({records,db,accountId,pantry,onCook,onEdit}:Props) {
     [plan,week,savedRecipes,pantry.ingredients]);
   const manual=useMemo(()=>plan?.manualItems.filter(item=>item.week===week)??[],[plan,week]);
   const visibleRows=showNeededOnly?rows.filter(row=>!row.available):rows;
-  const shoppingCount=rows.filter(row=>!row.checked&&!row.available).length+
+  const shoppingCount=rows.filter(row=>!row.checked).length+
     manual.filter(item=>!item.checked).length;
   const plannedDays=weekDays(week);
   const today=localToday();
