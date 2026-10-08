@@ -43,6 +43,8 @@ import {
   setRecipeInCollection,
 } from '../library/collections.ts';
 import { createBlankRecipe } from '../library/create.ts';
+import { createImportedRecipe, importDuplicateCandidates, type ImportDraft, type ImportKind } from '../import/recipe-import.ts';
+import { ImportSheet } from './ImportSheet.tsx';
 import {
   EMPTY_PANTRY,
   addIngredients,
@@ -285,10 +287,12 @@ function AddSheet({
   open,
   onClose,
   onCreate,
+  onImport,
 }: {
   open: boolean;
   onClose: () => void;
   onCreate: (title: string) => Promise<void>;
+  onImport: (kind: ImportKind) => void;
 }) {
   const [title, setTitle] = useState('');
   const [saving, setSaving] = useState(false);
@@ -329,26 +333,17 @@ function AddSheet({
               <small>Start with a title now</small>
             </span>
           </button>
-          <button className="capture-option" type="button" disabled>
+          <button className="capture-option is-ready" type="button" onClick={() => onImport('website')}>
             <Sparkles size={22} />
-            <span>
-              <strong>Paste a URL</strong>
-              <small>Capture phase</small>
-            </span>
+            <span><strong>Import from URL</strong><small>Structured recipe sites</small></span>
           </button>
-          <button className="capture-option" type="button" disabled>
+          <button className="capture-option is-ready" type="button" onClick={() => onImport('photo')}>
             <ChefHat size={22} />
-            <span>
-              <strong>Photo or screenshot</strong>
-              <small>Capture phase</small>
-            </span>
+            <span><strong>Photo or screenshot</strong><small>Extract text on this device</small></span>
           </button>
-          <button className="capture-option" type="button" disabled>
+          <button className="capture-option is-ready" type="button" onClick={() => onImport('text')}>
             <TimerReset size={22} />
-            <span>
-              <strong>Record a recipe</strong>
-              <small>Capture phase</small>
-            </span>
+            <span><strong>Paste recipe text</strong><small>Ingredients and steps</small></span>
           </button>
         </div>
         <form
@@ -636,6 +631,13 @@ export default function App() {
   const [library, setLibrary] = useState<LibraryState>(EMPTY_LIBRARY);
   const [section, setSection] = useState<Section>(initialSection);
   const [addOpen, setAddOpen] = useState(false);
+  const [importMode, setImportMode] = useState<ImportKind>('text');
+  const [importOpen, setImportOpen] = useState(false);
+  const openImporter = (mode: ImportKind) => {
+    setAddOpen(false);
+    setImportMode(mode);
+    setImportOpen(true);
+  };
   const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null);
   const [collectionRecipeId, setCollectionRecipeId] = useState<string | null>(
     null,
@@ -1425,13 +1427,28 @@ export default function App() {
         onClose={() => setAddOpen(false)}
         onCreate={async (title) => {
           if (!runtime) return;
-          const document = createBlankRecipe(title, {
-            locale: navigator.language,
-          });
+          const document = createBlankRecipe(title, { locale: navigator.language });
           await runtime.recipeSync.stageCreate(document);
           await reload(runtime);
           setSelectedRecipeId(document.recipe.id);
           void sync(runtime);
+        }}
+        onImport={openImporter}
+      />
+      <ImportSheet
+        open={importOpen}
+        initialMode={importMode}
+        onClose={() => setImportOpen(false)}
+        onSave={async (draft: ImportDraft, allowDuplicate: boolean) => {
+          if (!runtime) throw new Error('Sign in before importing.');
+          const duplicates = await importDuplicateCandidates(draft, library.recipes);
+          if (duplicates.length > 0 && !allowDuplicate) return 'duplicate';
+          const document = await createImportedRecipe(draft, { locale: navigator.language });
+          await runtime.recipeSync.stageCreate(document);
+          await reload(runtime);
+          setSelectedRecipeId(document.recipe.id);
+          void sync(runtime);
+          return 'saved';
         }}
       />
 
