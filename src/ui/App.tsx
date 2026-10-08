@@ -834,6 +834,13 @@ export default function App() {
 
         const db = await RecipeLocalDb.open();
         activeDb = db;
+        // React StrictMode can clean up a boot effect while IndexedDB is opening.
+        // Close the late handle rather than launching a second orphan sync engine.
+        if (cancelled) {
+          db.close();
+          activeDb = null;
+          return;
+        }
         const api = new RecipeCoreApi({
           baseUrl: coreUrl,
           getAccessToken: () => getRecipeAccessToken(authClient),
@@ -1033,7 +1040,7 @@ export default function App() {
         <div className="brand-mark warning"><CircleAlert size={26} /></div>
         <h1>Could not open Recipe</h1>
         <p>{bootError}</p>
-        <p className="auth-copy">Your saved recipes remain on this device. Check your connection and try again. If this persists, verify the Account and Core configuration.</p>
+        <p className="auth-copy">This error has not cleared your locally saved recipes. Check your connection and try again. If this persists, verify the Account and Core configuration.</p>
         <button className="button button-primary" type="button" onClick={() => globalThis.location.reload()}>
           Retry opening Recipe
         </button>
