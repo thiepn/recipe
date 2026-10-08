@@ -126,16 +126,17 @@ describe('P7 Recipe MCP owner-scoped service',()=>{
   expect((await service.findByIngredients({available:['rice'],max_missing:0})).recipes).toHaveLength(0);
  });
 });
+const runtime = globalThis as typeof globalThis & {process:{env:Record<string,string|undefined>}};
 const oldEnv={
- THIEPN_ACCOUNT_URL:process.env.THIEPN_ACCOUNT_URL,
- THIEPN_ACCOUNT_PUBLISHABLE_KEY:process.env.THIEPN_ACCOUNT_PUBLISHABLE_KEY,
- THIEPN_CORE_GATEWAY_URL:process.env.THIEPN_CORE_GATEWAY_URL,
- RECIPE_MCP_RESOURCE_URL:process.env.RECIPE_MCP_RESOURCE_URL,
+ THIEPN_ACCOUNT_URL:runtime.process.env.THIEPN_ACCOUNT_URL,
+ THIEPN_ACCOUNT_PUBLISHABLE_KEY:runtime.process.env.THIEPN_ACCOUNT_PUBLISHABLE_KEY,
+ THIEPN_CORE_GATEWAY_URL:runtime.process.env.THIEPN_CORE_GATEWAY_URL,
+ RECIPE_MCP_RESOURCE_URL:runtime.process.env.RECIPE_MCP_RESOURCE_URL,
 };
-process.env.THIEPN_ACCOUNT_URL='https://account.example';
-process.env.THIEPN_ACCOUNT_PUBLISHABLE_KEY='test-publishable';
-process.env.THIEPN_CORE_GATEWAY_URL='https://core.example';
-process.env.RECIPE_MCP_RESOURCE_URL='https://recipe.example/api/mcp';
+runtime.process.env.THIEPN_ACCOUNT_URL='https://account.example';
+runtime.process.env.THIEPN_ACCOUNT_PUBLISHABLE_KEY='test-publishable';
+runtime.process.env.THIEPN_CORE_GATEWAY_URL='https://core.example';
+runtime.process.env.RECIPE_MCP_RESOURCE_URL='https://recipe.example/api/mcp';
 const fetchOriginal=globalThis.fetch;
 afterEach(()=>{
  globalThis.fetch=fetchOriginal;
