@@ -34,7 +34,7 @@ const localKey=(kind:WorkspaceKind,key:string)=>
 // JSONB normalizes object member order. Do not interpret key-order changes as edits.
 export function canonicalJson(value:unknown):string {
   if(value===undefined)return 'null';
-  if(value===null || typeof value!=='object')return JSON.stringify(value);
+  if(value===null || typeof value!=='object')return JSON.stringify(value)??'null';
   if(Array.isArray(value))return `[${value.map(canonicalJson).join(',')}]`;
   const obj=value as Record<string,unknown>;
   return `{${Object.keys(obj).sort()
@@ -60,6 +60,9 @@ export class RecipeWorkspaceSync {
 
   async #readLocal(kind:WorkspaceKind,key:string,record?:LocalRecipeRecord):Promise<unknown|null>{
     const rawKey=localKey(kind,key);
+    if(kind==='session' && !record){
+      record=await this.#db.getDocument(this.#accountId,key);
+    }
     if(kind==='plan'){
       // Wait until queued edits from the Plan page have reached IndexedDB.
       await mealPlannerStoreFor(this.#db,this.#accountId).load();
@@ -121,6 +124,16 @@ export class RecipeWorkspaceSync {
       const baseRev=base?.revision??0;
       const previouslySynced=base!==null;
       const localDirty=previouslySynced?!same(local,base.document):local!==null;
+
+      // Reject missing/rolled-back or tampered server revisions. A remote
+      // outage/reinitialization must never silently erase a local cookbook.
+      if(base && (
+        remoteRev<base.revision ||
+        (remoteRev===base.revision && !same(remoteDoc,base.document))
+      )){
+        conflicts.push({kind,resourceKey:key,local,remote:remoteDoc,remoteRevision:remoteRev});
+        continue;
+      }
 
       if(!localDirty){
         if(remoteRev===baseRev && (previouslySynced||remoteRev===0))continue;
