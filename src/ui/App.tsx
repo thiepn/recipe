@@ -1461,8 +1461,10 @@ export default function App() {
             </>
           )}
 
-          {section === 'cook' && (
+          {section === 'cook' && runtime && (
             <CookWorkspace
+              db={runtime.db}
+              accountId={runtime.accountId}
               records={activeRecipes}
               selectedId={cookingRecipeId}
               onChoose={id=>setCookingRecipeId(id)}
