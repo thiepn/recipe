@@ -76,8 +76,7 @@ describe('P14 account sign-out data-loss guard', () => {
     const db = await freshDb();
     await db.setMeta(owner, 'pantry-v1', { schemaVersion: 1, ingredients: ['potato'], assumeStaples: false });
     let signedOut = false;
-    const auth = { auth: { signOut: async () => { signedOut = true; return { error: null }; } } }
-      as unknown as SupabaseClient;
+    const auth = { auth: { signOut: async () => { signedOut = true; return { error: null }; } } } as unknown as SupabaseClient;
     await signOutRecipe(auth, db, owner, { discardLocalWorkspace: true });
     expect(signedOut).toBe(true);
     expect(await db.getMeta(owner, 'pantry-v1')).toBeUndefined();
