@@ -269,7 +269,7 @@ export function ingredientSuggestions(
   return [...byKey.entries()]
     .filter(([key, { label }]) =>
       normalizeIngredientText(label).includes(needle) ||
-      (ALIAS_GROUPS[key]?.some((alias) => normalizeIngredientText(alias).includes(needle)) ?? false),
+      (ALIAS_GROUPS[key]?.some((alias) => normalizeIngredientText(alias).startsWith(needle)) ?? false),
     )
     .map(([, value]) => value)
     .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
