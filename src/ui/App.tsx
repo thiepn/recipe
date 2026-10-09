@@ -972,7 +972,10 @@ export default function App() {
   useEffect(() => {
     if (!runtime) return;
     const onOnline = () => { setOnline(true); void sync(runtime); };
-    const onOffline = () => { setOnline(false); void refreshSyncHealth(runtime); };
+    const onOffline = () => {
+      setOnline(false);
+      void refreshSyncHealth(runtime).catch(() => setSyncAttempt('failed'));
+    };
     globalThis.addEventListener('online', onOnline);
     globalThis.addEventListener('offline', onOffline);
     const timer = globalThis.setInterval(() => {
@@ -1053,7 +1056,7 @@ export default function App() {
     if (!current) throw new Error('Recipe is no longer available on this device.');
     await runtime.recipeSync.stageReplace(transform(current.working));
     await reload(runtime);
-    await refreshSyncHealth(runtime);
+    void refreshSyncHealth(runtime).catch(() => setSyncAttempt('failed'));
     void sync(runtime);
   };
 
@@ -1064,7 +1067,7 @@ export default function App() {
     const document = await createImportedRecipe(draft, { locale: navigator.language });
     await runtime.recipeSync.stageCreate(document);
     await reload(runtime);
-    await refreshSyncHealth(runtime);
+    void refreshSyncHealth(runtime).catch(() => setSyncAttempt('failed'));
     setSelectedRecipeId(document.recipe.id);
     void sync(runtime);
     return 'saved';
@@ -1074,7 +1077,7 @@ export default function App() {
     if (!runtime) return;
     await runtime.collectionSync.stageReplace(book);
     await reload(runtime);
-    await refreshSyncHealth(runtime);
+    void refreshSyncHealth(runtime).catch(() => setSyncAttempt('failed'));
     void sync(runtime);
   };
 
