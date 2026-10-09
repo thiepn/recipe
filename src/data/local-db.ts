@@ -875,8 +875,7 @@ export class RecipeLocalDb {
           canonicalJson(record.working) !== canonicalJson(conflict.local))
         throw new Error('Collections changed locally. Review before resolving.');
       const outbox = tx.objectStore(STORES.collectionOutbox);
-      const pending = await requestResult(outbox.index('by-account').getAll(accountId))
-        as CollectionOutboxMutation[];
+      const pending = await requestResult(outbox.index('by-account').getAll(accountId)) as CollectionOutboxMutation[];
       if (pending.some(row => row.state === 'in_flight'))
         throw new Error('A collection save is still in progress.');
       if (await requestResult(outbox.get(newMutationId)))
@@ -969,8 +968,7 @@ export class RecipeLocalDb {
       const books = tx.objectStore(STORES.collectionBook);
       const outbox = tx.objectStore(STORES.collectionOutbox);
       const record = await requestResult(books.get(accountId)) as LocalCollectionBookRecord | undefined;
-      const rows = await requestResult(outbox.index('by-account').getAll(accountId))
-        as CollectionOutboxMutation[];
+      const rows = await requestResult(outbox.index('by-account').getAll(accountId)) as CollectionOutboxMutation[];
       if (!record || record.syncState === 'conflict' || rows.length === 0 ||
           !rows.some(item => item.state === 'quarantined') ||
           rows.some(item => item.state !== 'quarantined' &&
