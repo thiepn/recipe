@@ -3142,3 +3142,74 @@ body {
   margin-top: 1.5rem;
 }
 .signout-warning-actions .button { flex: 1 1 12rem; }
+
+/* P15C — operational sync state: compact, factual, and visible on mobile. */
+.sync-recovery {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 14px;
+  margin-bottom: 24px;
+  padding: 15px 17px;
+  border: 1px solid var(--line);
+  border-left: 3px solid #9b8875;
+  background: var(--surface);
+  border-radius: 10px;
+}
+.sync-recovery--blocked,
+.sync-recovery--conflict {
+  border-left-color: #ad5d36;
+}
+.sync-recovery--offline,
+.sync-recovery--unavailable {
+  border-left-color: #927f67;
+}
+.sync-recovery-icon {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+.sync-recovery--blocked .sync-recovery-icon,
+.sync-recovery--conflict .sync-recovery-icon {
+  color: #ad5d36;
+}
+.sync-recovery-copy {
+  min-width: 0;
+}
+.sync-recovery-copy strong {
+  display: block;
+  font-size: .91rem;
+  font-weight: 650;
+}
+.sync-recovery-copy p {
+  margin: 3px 0 0;
+  font-size: .82rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.sync-recovery-copy small {
+  display: block;
+  margin-top: 6px;
+  font-size: .75rem;
+  color: var(--muted);
+}
+.sync-recovery-action {
+  white-space: nowrap;
+}
+.sync-status:disabled {
+  opacity: .82;
+}
+@media (max-width: 620px) {
+  .sync-recovery {
+    grid-template-columns: 24px minmax(0, 1fr);
+    align-items: start;
+    gap: 10px;
+    margin-bottom: 20px;
+    padding: 13px;
+  }
+  .sync-recovery-action {
+    grid-column: 2;
+    justify-self: start;
+    margin-top: 2px;
+  }
+}
