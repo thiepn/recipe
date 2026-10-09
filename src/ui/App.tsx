@@ -833,7 +833,7 @@ export default function App() {
   );
 
   const syncNotice = describeSyncHealth(syncHealth, {
-    online, syncing, attempt: syncAttempt,
+    online, syncing, attempt: syncAttempt, workspaceStatus,
   });
 
   useEffect(() => {
