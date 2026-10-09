@@ -1,0 +1,27 @@
+name: Recipe Production Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: 'Exact GitHub commit SHA that must be live in production'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verify live domain, exact commit and public routes/assets
+        run: node scripts/check-site.mjs
+        env:
+          RECIPE_SITE_URL: https://recipe.thiepn.dev
+          RECIPE_EXPECTED_SHA: ${{ inputs.expected_sha }}
