@@ -31,6 +31,7 @@ export async function checkSite(baseUrl, expectedSha = '', attempts = 20) {
     throw new Error('RECIPE_SITE_URL must use HTTP(S)');
 
   let manifest;
+  let verified = false;
   let lastError;
   for (let attempt = 0; attempt < attempts; attempt++) {
     try {
@@ -40,13 +41,14 @@ export async function checkSite(baseUrl, expectedSha = '', attempts = 20) {
         throw new Error('Invalid Recipe release manifest');
       if (expectedSha && manifest.commit !== expectedSha)
         throw new Error(`Release mismatch: expected ${expectedSha}, deployed ${manifest.commit}`);
+      verified = true;
       break;
     } catch (error) {
       lastError = error;
       if (attempt < attempts - 1) await sleep(1000);
     }
   }
-  if (!manifest || (expectedSha && manifest.commit !== expectedSha))
+  if (!verified)
     throw lastError ?? new Error('Release manifest unavailable');
 
   const routes = ['/', '/recipes', '/collections', '/cook', '/plan', '/auth/callback'];

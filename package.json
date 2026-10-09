@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "verify": "pnpm typecheck && pnpm test && pnpm build && pnpm smoke:local",
+    "verify": "pnpm typecheck && pnpm test && node --test tests/site-smoke.test.mjs && pnpm build && pnpm smoke:local",
     "smoke:site": "node scripts/check-site.mjs",
     "smoke:local": "node scripts/check-local.mjs",
     "test:browser": "playwright test"
