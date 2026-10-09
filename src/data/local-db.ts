@@ -1,9 +1,11 @@
 import { canonicalJson } from '../workspace/canonical.ts';
-import type {
-  RecipeCollectionBook,
-  RecipeDocument,
-  RecipeEditableCollectionBook,
-  RecipeEditableDocument,
+import {
+  recipeEditableCollectionBookSchema,
+  recipeEditableDocumentSchema,
+  type RecipeCollectionBook,
+  type RecipeDocument,
+  type RecipeEditableCollectionBook,
+  type RecipeEditableDocument,
 } from '../api/protocol.ts';
 
 const DB_NAME = 'thiepn-recipe';
@@ -842,7 +844,7 @@ export class RecipeLocalDb {
       } satisfies LocalRecipeRecord);
       await done;
     } catch (error) {
-      tx.abort();
+      try { tx.abort(); } catch { /* transaction already closed */ }
       void done.catch(() => undefined);
       throw error;
     }
@@ -904,7 +906,89 @@ export class RecipeLocalDb {
       } satisfies LocalCollectionBookRecord);
       await done;
     } catch (error) {
-      tx.abort();
+      try { tx.abort(); } catch { /* transaction already closed */ }
+      void done.catch(() => undefined);
+      throw error;
+    }
+  }
+
+  /** Requeue only already-quarantined mutations using a fresh idempotency
+   * key. Current local work is validated and retained until server acknowledgement. */
+  async repairQuarantinedRecipe(
+    accountId: string,
+    resourceId: string,
+    newMutationId: string,
+    now: number,
+  ): Promise<void> {
+    const tx = this.#db.transaction([STORES.documents, STORES.outbox], 'readwrite');
+    const done = transactionDone(tx);
+    try {
+      const documents = tx.objectStore(STORES.documents);
+      const outbox = tx.objectStore(STORES.outbox);
+      const record = await requestResult(documents.get([accountId, resourceId]))
+        as LocalRecipeRecord | undefined;
+      const rows = await requestResult(
+        outbox.index('by-account-resource').getAll([accountId, resourceId]),
+      ) as OutboxMutation[];
+      if (!record || record.syncState === 'conflict' || rows.length === 0 ||
+          rows.some(item => item.state !== 'quarantined'))
+        throw new Error('Only exclusively blocked recipe uploads can be repaired.');
+      if (record.tombstone && record.serverRevision === 0)
+        throw new Error('A local-only deleted recipe cannot be uploaded.');
+      const valid = recipeEditableDocumentSchema.parse(record.working);
+      if (await requestResult(outbox.get(newMutationId)))
+        throw new Error('Recovery mutation identifier already exists.');
+      for (const row of rows) outbox.delete(row.mutationId);
+      const operation: OutboxMutation['operation'] =
+        record.tombstone ? 'delete' : record.serverRevision === 0 ? 'create' : 'replace';
+      outbox.put({
+        mutationId: newMutationId, accountId, resourceId,
+        operation, baseRevision: record.serverRevision,
+        document: record.tombstone ? null : valid,
+        state: 'pending', attempts: 0, createdAt: now,
+        lastAttemptAt: null, lastErrorCode: null,
+      } satisfies OutboxMutation);
+      documents.put({ ...record, syncState: 'pending', updatedAt: now });
+      await done;
+    } catch (error) {
+      try { tx.abort(); } catch { /* transaction already closed */ }
+      void done.catch(() => undefined);
+      throw error;
+    }
+  }
+
+  async repairQuarantinedCollection(
+    accountId: string,
+    newMutationId: string,
+    now: number,
+  ): Promise<void> {
+    const tx = this.#db.transaction(
+      [STORES.collectionBook, STORES.collectionOutbox], 'readwrite',
+    );
+    const done = transactionDone(tx);
+    try {
+      const books = tx.objectStore(STORES.collectionBook);
+      const outbox = tx.objectStore(STORES.collectionOutbox);
+      const record = await requestResult(books.get(accountId))
+        as LocalCollectionBookRecord | undefined;
+      const rows = await requestResult(outbox.index('by-account').getAll(accountId))
+        as CollectionOutboxMutation[];
+      if (!record || record.syncState === 'conflict' || rows.length === 0 ||
+          rows.some(item => item.state !== 'quarantined'))
+        throw new Error('Only exclusively blocked collection uploads can be repaired.');
+      const valid = recipeEditableCollectionBookSchema.parse(record.working);
+      if (await requestResult(outbox.get(newMutationId)))
+        throw new Error('Recovery mutation identifier already exists.');
+      for (const row of rows) outbox.delete(row.mutationId);
+      outbox.put({
+        mutationId: newMutationId, accountId, baseRevision: record.serverRevision,
+        document: valid, state: 'pending', attempts: 0, createdAt: now,
+        lastAttemptAt: null, lastErrorCode: null,
+      } satisfies CollectionOutboxMutation);
+      books.put({ ...record, syncState: 'pending', updatedAt: now });
+      await done;
+    } catch (error) {
+      try { tx.abort(); } catch { /* transaction already closed */ }
       void done.catch(() => undefined);
       throw error;
     }
