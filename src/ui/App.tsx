@@ -1769,6 +1769,11 @@ export default function App() {
         <RecoveryPanel db={runtime.db} api={runtime.api}
           accountId={runtime.accountId} syncBusy={syncing}
           onClose={() => setRecoveryOpen(false)}
+          onEditRecipe={(id) => {
+            setRecoveryOpen(false);
+            setSelectedRecipeId(null);
+            setEditingRecipeId(id);
+          }}
           onRecovered={async () => {
             await Promise.all([
               reload(runtime),
