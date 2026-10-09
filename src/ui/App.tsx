@@ -28,7 +28,7 @@ import {
 import {
   createRecipeAuthClient,
   getRecipeAccessToken,
-  getVerifiedRecipeIdentity,
+  getStartupRecipeIdentity,
   handleRecipeAuthCallback,
   signInWithGoogle,
   signOutRecipe,
@@ -823,16 +823,24 @@ export default function App() {
           setSection(initialSection());
         }
 
-        let identity;
-        try {
-          identity = await getVerifiedRecipeIdentity(authClient);
-        } catch {
+        // Only absence of a saved session means signed out. Network, token
+        // refresh and Account verification failures must remain recoverable
+        // startup errors instead of incorrectly prompting for Google login.
+        const identity = await getStartupRecipeIdentity(authClient);
+        if (!identity) {
           if (!cancelled) setBootState('signed-out');
           return;
         }
 
         const db = await RecipeLocalDb.open();
         activeDb = db;
+        // React StrictMode can clean up a boot effect while IndexedDB is opening.
+        // Close the late handle rather than launching a second orphan sync engine.
+        if (cancelled) {
+          db.close();
+          activeDb = null;
+          return;
+        }
         const api = new RecipeCoreApi({
           baseUrl: coreUrl,
           getAccessToken: () => getRecipeAccessToken(authClient),
@@ -1030,9 +1038,12 @@ export default function App() {
     return (
       <main className="boot-screen">
         <div className="brand-mark warning"><CircleAlert size={26} /></div>
-        <h1>Recipe is not configured yet.</h1>
+        <h1>Could not open Recipe</h1>
         <p>{bootError}</p>
-        <small>Set the Account and Core environment variables before launch.</small>
+        <p className="auth-copy">This error has not cleared your locally saved recipes. Check your connection and try again. If this persists, verify the Account and Core configuration.</p>
+        <button className="button button-primary" type="button" onClick={() => globalThis.location.reload()}>
+          Retry opening Recipe
+        </button>
       </main>
     );
   }
