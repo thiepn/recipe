@@ -5,6 +5,7 @@ import {
   type RecipeEditableCollectionBook,
 } from '../api/protocol.ts';
 import { RecipeApiError, RecipeCoreApi } from '../api/core.ts';
+import { isRetryableSyncFailure } from './retry.ts';
 import {
   RecipeLocalDb,
   type CollectionConflictRecord,
@@ -44,14 +45,7 @@ export function editableCollectionBookFromRemote(
 function disposition(
   error: unknown,
 ): { state: 'retry' | 'quarantined'; stopCycle: boolean } {
-  if (!(error instanceof RecipeApiError))
-    return { state: 'retry', stopCycle: true };
-  if (
-    error.status === 0 ||
-    error.status === 401 ||
-    error.status === 403 ||
-    error.status >= 500
-  )
+  if (isRetryableSyncFailure(error))
     return { state: 'retry', stopCycle: true };
   return { state: 'quarantined', stopCycle: true };
 }
@@ -251,11 +245,9 @@ export class CollectionSyncEngine {
           lastErrorCode:
             error instanceof RecipeApiError ? error.code : 'SYNC_ERROR',
         });
-        await this.#db.putCollectionBook({
-          ...local,
-          syncState: 'error',
-          updatedAt: this.#now(),
-        });
+        await this.#db.markCollectionSyncFailure(
+          this.#accountId, local.localRevision, this.#now(),
+        );
         return false;
       }
 
@@ -285,25 +277,13 @@ export class CollectionSyncEngine {
         return false;
       }
 
-      const later = (await this.#db.listCollectionOutbox(this.#accountId)).filter(
-        (row) => row.mutationId !== inFlight.mutationId,
-      );
-      const latest =
-        (await this.#db.getCollectionBook(this.#accountId)) ?? local;
-      const preserveWorking = later.length > 0;
-
-      await this.#db.applyCollectionMutationSuccess(
-        {
-          ...latest,
-          working: preserveWorking
-            ? latest.working
-            : editableCollectionBookFromRemote(result.document),
-          base: result.document,
-          serverRevision: result.revision,
-          syncState: preserveWorking ? 'pending' : 'synced',
-          updatedAt: this.#now(),
-        },
+      await this.#db.settleCollectionMutation(
+        this.#accountId,
         inFlight.mutationId,
+        result.document,
+        editableCollectionBookFromRemote(result.document),
+        result.revision,
+        this.#now(),
       );
     }
 

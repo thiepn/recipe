@@ -356,6 +356,76 @@ export class RecipeLocalDb {
     await transactionDone(tx);
   }
 
+  /**
+   * Mark only the exact snapshot that failed. A later local edit may have
+   * committed while the HTTP request was in progress; never overwrite it.
+   */
+  async markRecipeSyncFailure(
+    accountId: string,
+    resourceId: string,
+    expectedLocalRevision: number,
+    now: number,
+  ): Promise<void> {
+    const tx = this.#db.transaction(STORES.documents, 'readwrite');
+    const done = transactionDone(tx);
+    const store = tx.objectStore(STORES.documents);
+    const latest = (await requestResult(store.get([accountId, resourceId]))) as LocalRecipeRecord | undefined;
+    if (latest && latest.localRevision === expectedLocalRevision &&
+        latest.syncState !== 'conflict') {
+      store.put({ ...latest, syncState: 'error', updatedAt: now });
+    }
+    await done;
+  }
+
+  /**
+   * Acknowledge a mutation and compute the surviving working copy in one
+   * IndexedDB transaction. The user may have edited during the canonical
+   * download, so a previously captured document or outbox list is unsafe.
+   */
+  async settleRecipeMutation(
+    accountId: string,
+    resourceId: string,
+    mutationId: string,
+    remote: RecipeDocument,
+    canonicalWorking: RecipeEditableDocument,
+    revision: number,
+    now: number,
+  ): Promise<void> {
+    const tx = this.#db.transaction([STORES.documents, STORES.outbox], 'readwrite');
+    const done = transactionDone(tx);
+    const documents = tx.objectStore(STORES.documents);
+    const outbox = tx.objectStore(STORES.outbox);
+    const current = (await requestResult(documents.get([accountId, resourceId]))) as LocalRecipeRecord | undefined;
+    const acknowledged = (await requestResult(outbox.get(mutationId))) as OutboxMutation | undefined;
+
+    if (!current || !acknowledged || acknowledged.accountId !== accountId ||
+        acknowledged.resourceId !== resourceId) {
+      await done;
+      return;
+    }
+    const queued = (await requestResult(
+      outbox.index('by-account-resource').getAll([accountId, resourceId]),
+    )) as OutboxMutation[];
+    const later = queued.filter(row => row.mutationId !== mutationId);
+    const preserveWorking = later.length > 0 || current.syncState === 'conflict';
+    const state: LocalSyncState = current.syncState === 'conflict' ? 'conflict'
+      : later.some(row => row.state === 'conflict') ? 'conflict'
+      : later.some(row => row.state === 'quarantined') ? 'error'
+      : later.length > 0 ? 'pending' : 'synced';
+
+    documents.put({
+      ...current,
+      working: preserveWorking ? current.working : canonicalWorking,
+      base: remote,
+      serverRevision: revision,
+      syncState: state,
+      tombstone: preserveWorking ? current.tombstone : remote.recipe.deletedAt !== null,
+      updatedAt: now,
+    } satisfies LocalRecipeRecord);
+    outbox.delete(mutationId);
+    await done;
+  }
+
   async removeMutation(mutationId: string): Promise<void> {
     const tx = this.#db.transaction(STORES.outbox, 'readwrite');
     tx.objectStore(STORES.outbox).delete(mutationId);
@@ -384,10 +454,25 @@ export class RecipeLocalDb {
       [STORES.documents, STORES.outbox, STORES.conflicts],
       'readwrite',
     );
-    tx.objectStore(STORES.documents).put(record);
+    const done = transactionDone(tx);
+    const documents = tx.objectStore(STORES.documents);
+    const latest = (await requestResult(
+      documents.get([record.accountId, record.resourceId]),
+    )) as LocalRecipeRecord | undefined;
+    // A conflict response may arrive after another local edit was committed.
+    // Conflict resolution must show that newest working copy, not erase it.
+    documents.put({
+      ...record,
+      working: latest?.working ?? record.working,
+      localRevision: latest?.localRevision ?? record.localRevision,
+      tombstone: latest?.tombstone ?? record.tombstone,
+      updatedAt: Math.max(record.updatedAt, latest?.updatedAt ?? 0),
+    });
     if (mutation) tx.objectStore(STORES.outbox).put(mutation);
-    tx.objectStore(STORES.conflicts).put(conflict);
-    await transactionDone(tx);
+    tx.objectStore(STORES.conflicts).put({
+      ...conflict, local: latest?.working ?? conflict.local,
+    });
+    await done;
   }
 
   async listConflicts(accountId: string): Promise<ConflictRecord[]> {
@@ -465,6 +550,63 @@ export class RecipeLocalDb {
     await transactionDone(tx);
   }
 
+  async markCollectionSyncFailure(
+    accountId: string,
+    expectedLocalRevision: number,
+    now: number,
+  ): Promise<void> {
+    const tx = this.#db.transaction(STORES.collectionBook, 'readwrite');
+    const done = transactionDone(tx);
+    const store = tx.objectStore(STORES.collectionBook);
+    const current = (await requestResult(store.get(accountId))) as LocalCollectionBookRecord | undefined;
+    if (current && current.localRevision === expectedLocalRevision &&
+        current.syncState !== 'conflict') {
+      store.put({ ...current, syncState: 'error', updatedAt: now });
+    }
+    await done;
+  }
+
+  async settleCollectionMutation(
+    accountId: string,
+    mutationId: string,
+    remote: RecipeCollectionBook,
+    canonicalWorking: RecipeEditableCollectionBook,
+    revision: number,
+    now: number,
+  ): Promise<void> {
+    const tx = this.#db.transaction(
+      [STORES.collectionBook, STORES.collectionOutbox], 'readwrite',
+    );
+    const done = transactionDone(tx);
+    const books = tx.objectStore(STORES.collectionBook);
+    const outbox = tx.objectStore(STORES.collectionOutbox);
+    const current = (await requestResult(books.get(accountId))) as LocalCollectionBookRecord | undefined;
+    const acknowledged = (await requestResult(outbox.get(mutationId))) as CollectionOutboxMutation | undefined;
+
+    if (!current || !acknowledged || acknowledged.accountId !== accountId) {
+      await done;
+      return;
+    }
+    const queued = (await requestResult(
+      outbox.index('by-account').getAll(accountId),
+    )) as CollectionOutboxMutation[];
+    const later = queued.filter(row => row.mutationId !== mutationId);
+    const preserveWorking = later.length > 0 || current.syncState === 'conflict';
+    books.put({
+      ...current,
+      working: preserveWorking ? current.working : canonicalWorking,
+      base: remote,
+      serverRevision: revision,
+      syncState: current.syncState === 'conflict' ? 'conflict'
+        : later.some(row => row.state === 'conflict') ? 'conflict'
+        : later.some(row => row.state === 'quarantined') ? 'error'
+        : later.length > 0 ? 'pending' : 'synced',
+      updatedAt: now,
+    } satisfies LocalCollectionBookRecord);
+    outbox.delete(mutationId);
+    await done;
+  }
+
   async applyCollectionMutationSuccess(
     record: LocalCollectionBookRecord,
     mutationId: string,
@@ -491,10 +633,20 @@ export class RecipeLocalDb {
       ],
       'readwrite',
     );
-    tx.objectStore(STORES.collectionBook).put(record);
+    const done = transactionDone(tx);
+    const books = tx.objectStore(STORES.collectionBook);
+    const latest = (await requestResult(books.get(record.accountId))) as LocalCollectionBookRecord | undefined;
+    books.put({
+      ...record,
+      working: latest?.working ?? record.working,
+      localRevision: latest?.localRevision ?? record.localRevision,
+      updatedAt: Math.max(record.updatedAt, latest?.updatedAt ?? 0),
+    });
     tx.objectStore(STORES.collectionOutbox).put(mutation);
-    tx.objectStore(STORES.collectionConflicts).put(conflict);
-    await transactionDone(tx);
+    tx.objectStore(STORES.collectionConflicts).put({
+      ...conflict, local: latest?.working ?? conflict.local,
+    });
+    await done;
   }
 
   async listCollectionConflicts(
@@ -534,11 +686,26 @@ export class RecipeLocalDb {
       [STORES.documents, STORES.conflicts, STORES.meta],
       'readwrite',
     );
+    const done = transactionDone(tx);
     const documentStore = tx.objectStore(STORES.documents);
     const conflictStore = tx.objectStore(STORES.conflicts);
     for (const document of documents) {
-      if (document.accountId !== accountId)
+      if (document.accountId !== accountId) {
+        tx.abort();
+        void done.catch(() => undefined);
         throw new Error('Pulled document ownership mismatch');
+      }
+      const latest = (await requestResult(
+        documentStore.get([accountId, document.resourceId]),
+      )) as LocalRecipeRecord | undefined;
+      // A user edit committed after the remote response was prepared.
+      // Abort the *entire* page (including cursor), so the next sync retries.
+      if (latest && (latest.localRevision !== document.localRevision ||
+          (latest.syncState === 'pending' && document.syncState === 'synced'))) {
+        tx.abort();
+        void done.catch(() => undefined);
+        throw new Error('Local recipe changed while applying cloud updates; retry sync');
+      }
       documentStore.put(document);
     }
     for (const conflict of conflicts) {
@@ -551,7 +718,7 @@ export class RecipeLocalDb {
       key: 'cursor',
       value: nextCursor,
     } satisfies MetaRecord);
-    await transactionDone(tx);
+    await done;
   }
 
   async wipeAccount(accountId: string): Promise<void> {
