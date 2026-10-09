@@ -115,6 +115,20 @@ interface MetaRecord {
   value: unknown;
 }
 
+export interface RecipeAccountBackup {
+  format: 'thiepn-recipe-local-backup';
+  schemaVersion: 1;
+  accountId: string;
+  exportedAt: string;
+  documents: LocalRecipeRecord[];
+  outbox: OutboxMutation[];
+  conflicts: ConflictRecord[];
+  collectionBook: LocalCollectionBookRecord | null;
+  collectionOutbox: CollectionOutboxMutation[];
+  collectionConflicts: CollectionConflictRecord[];
+  metadata: MetaRecord[];
+}
+
 function requestResult<T>(request: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
     request.onsuccess = () => resolve(request.result);
@@ -719,6 +733,181 @@ export class RecipeLocalDb {
       value: nextCursor,
     } satisfies MetaRecord);
     await done;
+  }
+
+  /**
+   * Read every account-owned IndexedDB store in one readonly transaction so the
+   * downloaded recovery file contains a consistent view. No credentials, tokens
+   * or storage from other THIEPN apps are included.
+   */
+  async exportAccountBackup(
+    accountId: string,
+    now: Date = new Date(),
+  ): Promise<RecipeAccountBackup> {
+    const tx = this.#db.transaction(Object.values(STORES), 'readonly');
+    const done = transactionDone(tx);
+    const byOwner = async <T>(store: string): Promise<T[]> =>
+      await requestResult(tx.objectStore(store).index('by-account').getAll(accountId)) as T[];
+    const documents = await byOwner<LocalRecipeRecord>(STORES.documents);
+    const outbox = await byOwner<OutboxMutation>(STORES.outbox);
+    const conflicts = await byOwner<ConflictRecord>(STORES.conflicts);
+    const collectionBook = await requestResult(
+      tx.objectStore(STORES.collectionBook).get(accountId),
+    ) as LocalCollectionBookRecord | undefined;
+    const collectionOutbox = await byOwner<CollectionOutboxMutation>(STORES.collectionOutbox);
+    const collectionConflicts = await byOwner<CollectionConflictRecord>(STORES.collectionConflicts);
+    const metadata = await byOwner<MetaRecord>(STORES.meta);
+    await done;
+    return {
+      format: 'thiepn-recipe-local-backup',
+      schemaVersion: 1,
+      accountId,
+      exportedAt: now.toISOString(),
+      documents,
+      outbox,
+      conflicts,
+      collectionBook: collectionBook ?? null,
+      collectionOutbox,
+      collectionConflicts,
+      metadata,
+    };
+  }
+
+  /** A conflict choice is applied only if its viewed snapshot is still current.
+   * Any in-flight mutation prevents resolution, avoiding idempotency races. */
+  async resolveRecipeConflict(
+    accountId: string,
+    conflictId: string,
+    expectedLocalRevision: number,
+    choice: 'keep-local' | 'use-cloud',
+    canonicalWorking: RecipeEditableDocument,
+    newMutationId: string,
+    now: number,
+  ): Promise<void> {
+    const tx = this.#db.transaction(
+      [STORES.documents, STORES.outbox, STORES.conflicts], 'readwrite',
+    );
+    const done = transactionDone(tx);
+    try {
+      const conflicts = tx.objectStore(STORES.conflicts);
+      const conflict = await requestResult(conflicts.get(conflictId)) as ConflictRecord | undefined;
+      if (!conflict || conflict.accountId !== accountId ||
+          !conflict.remote || conflict.remoteRevision === null)
+        throw new Error('This conflict is unavailable or cannot be resolved automatically.');
+      const documents = tx.objectStore(STORES.documents);
+      const record = await requestResult(documents.get([accountId, conflict.resourceId]))
+        as LocalRecipeRecord | undefined;
+      if (!record || record.localRevision !== expectedLocalRevision ||
+          record.syncState !== 'conflict' ||
+          canonicalJson(record.working) !== canonicalJson(conflict.local))
+        throw new Error('This recipe changed. Review the latest local version before resolving.');
+      const outbox = tx.objectStore(STORES.outbox);
+      const pending = await requestResult(
+        outbox.index('by-account-resource').getAll([accountId, conflict.resourceId]),
+      ) as OutboxMutation[];
+      if (pending.some(row => row.state === 'in_flight'))
+        throw new Error('A save is still in progress. Retry after it completes.');
+      if (await requestResult(outbox.get(newMutationId)))
+        throw new Error('Duplicate recovery mutation identifier.');
+      for (const row of pending) outbox.delete(row.mutationId);
+      const conflictKeys = await requestResult(
+        conflicts.index('by-account-resource').getAllKeys([accountId, conflict.resourceId]),
+      );
+      for (const key of conflictKeys) conflicts.delete(key);
+      if (choice === 'keep-local') {
+        outbox.put({
+          mutationId: newMutationId,
+          accountId,
+          resourceId: record.resourceId,
+          baseRevision: conflict.remoteRevision,
+          operation: record.tombstone ? 'delete' : 'replace',
+          document: record.tombstone ? null : record.working,
+          state: 'pending',
+          attempts: 0,
+          createdAt: now,
+          lastAttemptAt: null,
+          lastErrorCode: null,
+        } satisfies OutboxMutation);
+      }
+      documents.put({
+        ...record,
+        working: choice === 'keep-local' ? record.working : canonicalWorking,
+        base: conflict.remote,
+        serverRevision: conflict.remoteRevision,
+        localRevision: record.localRevision + 1,
+        syncState: choice === 'keep-local' ? 'pending' : 'synced',
+        tombstone: choice === 'keep-local' ? record.tombstone
+          : conflict.remote.recipe.deletedAt !== null,
+        updatedAt: now,
+      } satisfies LocalRecipeRecord);
+      await done;
+    } catch (error) {
+      tx.abort();
+      void done.catch(() => undefined);
+      throw error;
+    }
+  }
+
+  async resolveCollectionConflict(
+    accountId: string,
+    conflictId: string,
+    expectedLocalRevision: number,
+    choice: 'keep-local' | 'use-cloud',
+    canonicalWorking: RecipeEditableCollectionBook,
+    newMutationId: string,
+    now: number,
+  ): Promise<void> {
+    const tx = this.#db.transaction(
+      [STORES.collectionBook, STORES.collectionOutbox, STORES.collectionConflicts],
+      'readwrite',
+    );
+    const done = transactionDone(tx);
+    try {
+      const conflicts = tx.objectStore(STORES.collectionConflicts);
+      const conflict = await requestResult(conflicts.get(conflictId))
+        as CollectionConflictRecord | undefined;
+      if (!conflict || conflict.accountId !== accountId)
+        throw new Error('Collection conflict has changed. Reload and review again.');
+      const books = tx.objectStore(STORES.collectionBook);
+      const record = await requestResult(books.get(accountId)) as LocalCollectionBookRecord | undefined;
+      if (!record || record.localRevision !== expectedLocalRevision ||
+          record.syncState !== 'conflict' ||
+          canonicalJson(record.working) !== canonicalJson(conflict.local))
+        throw new Error('Collections changed locally. Review before resolving.');
+      const outbox = tx.objectStore(STORES.collectionOutbox);
+      const pending = await requestResult(outbox.index('by-account').getAll(accountId))
+        as CollectionOutboxMutation[];
+      if (pending.some(row => row.state === 'in_flight'))
+        throw new Error('A collection save is still in progress.');
+      if (await requestResult(outbox.get(newMutationId)))
+        throw new Error('Duplicate recovery mutation identifier.');
+      for (const row of pending) outbox.delete(row.mutationId);
+      const ids = await requestResult(conflicts.index('by-account').getAllKeys(accountId));
+      for (const id of ids) conflicts.delete(id);
+      if (choice === 'keep-local') {
+        outbox.put({
+          mutationId: newMutationId, accountId,
+          baseRevision: conflict.remoteRevision,
+          document: record.working,
+          state: 'pending', attempts: 0, createdAt: now,
+          lastAttemptAt: null, lastErrorCode: null,
+        } satisfies CollectionOutboxMutation);
+      }
+      books.put({
+        ...record,
+        working: choice === 'keep-local' ? record.working : canonicalWorking,
+        base: conflict.remote,
+        serverRevision: conflict.remoteRevision,
+        localRevision: record.localRevision + 1,
+        syncState: choice === 'keep-local' ? 'pending' : 'synced',
+        updatedAt: now,
+      } satisfies LocalCollectionBookRecord);
+      await done;
+    } catch (error) {
+      tx.abort();
+      void done.catch(() => undefined);
+      throw error;
+    }
   }
 
   async wipeAccount(accountId: string): Promise<void> {
