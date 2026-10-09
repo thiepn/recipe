@@ -931,8 +931,10 @@ export class RecipeLocalDb {
         outbox.index('by-account-resource').getAll([accountId, resourceId]),
       ) as OutboxMutation[];
       if (!record || record.syncState === 'conflict' || rows.length === 0 ||
-          rows.some(item => item.state !== 'quarantined'))
-        throw new Error('Only exclusively blocked recipe uploads can be repaired.');
+          !rows.some(item => item.state === 'quarantined') ||
+          rows.some(item => item.state !== 'quarantined' &&
+            !(item.state === 'pending' && item.attempts === 0)))
+        throw new Error('Only blocked and not-yet-sent recipe changes can be repaired.');
       if (record.tombstone && record.serverRevision === 0)
         throw new Error('A local-only deleted recipe cannot be uploaded.');
       const valid = recipeEditableDocumentSchema.parse(record.working);
@@ -974,8 +976,10 @@ export class RecipeLocalDb {
       const rows = await requestResult(outbox.index('by-account').getAll(accountId))
         as CollectionOutboxMutation[];
       if (!record || record.syncState === 'conflict' || rows.length === 0 ||
-          rows.some(item => item.state !== 'quarantined'))
-        throw new Error('Only exclusively blocked collection uploads can be repaired.');
+          !rows.some(item => item.state === 'quarantined') ||
+          rows.some(item => item.state !== 'quarantined' &&
+            !(item.state === 'pending' && item.attempts === 0)))
+        throw new Error('Only blocked and not-yet-sent collection changes can be repaired.');
       const valid = recipeEditableCollectionBookSchema.parse(record.working);
       if (await requestResult(outbox.get(newMutationId)))
         throw new Error('Recovery mutation identifier already exists.');
