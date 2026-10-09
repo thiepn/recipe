@@ -797,8 +797,7 @@ export class RecipeLocalDb {
           !conflict.remote || conflict.remoteRevision === null)
         throw new Error('This conflict is unavailable or cannot be resolved automatically.');
       const documents = tx.objectStore(STORES.documents);
-      const record = await requestResult(documents.get([accountId, conflict.resourceId]))
-        as LocalRecipeRecord | undefined;
+      const record = await requestResult(documents.get([accountId, conflict.resourceId])) as LocalRecipeRecord | undefined;
       if (!record || record.localRevision !== expectedLocalRevision ||
           record.syncState !== 'conflict' ||
           canonicalJson(record.working) !== canonicalJson(conflict.local))
@@ -866,8 +865,7 @@ export class RecipeLocalDb {
     const done = transactionDone(tx);
     try {
       const conflicts = tx.objectStore(STORES.collectionConflicts);
-      const conflict = await requestResult(conflicts.get(conflictId))
-        as CollectionConflictRecord | undefined;
+      const conflict = await requestResult(conflicts.get(conflictId)) as CollectionConflictRecord | undefined;
       if (!conflict || conflict.accountId !== accountId)
         throw new Error('Collection conflict has changed. Reload and review again.');
       const books = tx.objectStore(STORES.collectionBook);
@@ -925,8 +923,7 @@ export class RecipeLocalDb {
     try {
       const documents = tx.objectStore(STORES.documents);
       const outbox = tx.objectStore(STORES.outbox);
-      const record = await requestResult(documents.get([accountId, resourceId]))
-        as LocalRecipeRecord | undefined;
+      const record = await requestResult(documents.get([accountId, resourceId])) as LocalRecipeRecord | undefined;
       const rows = await requestResult(
         outbox.index('by-account-resource').getAll([accountId, resourceId]),
       ) as OutboxMutation[];
@@ -971,8 +968,7 @@ export class RecipeLocalDb {
     try {
       const books = tx.objectStore(STORES.collectionBook);
       const outbox = tx.objectStore(STORES.collectionOutbox);
-      const record = await requestResult(books.get(accountId))
-        as LocalCollectionBookRecord | undefined;
+      const record = await requestResult(books.get(accountId)) as LocalCollectionBookRecord | undefined;
       const rows = await requestResult(outbox.index('by-account').getAll(accountId))
         as CollectionOutboxMutation[];
       if (!record || record.syncState === 'conflict' || rows.length === 0 ||
