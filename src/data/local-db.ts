@@ -369,8 +369,7 @@ export class RecipeLocalDb {
     const tx = this.#db.transaction(STORES.documents, 'readwrite');
     const done = transactionDone(tx);
     const store = tx.objectStore(STORES.documents);
-    const latest = (await requestResult(store.get([accountId, resourceId])))
-      as LocalRecipeRecord | undefined;
+    const latest = (await requestResult(store.get([accountId, resourceId]))) as LocalRecipeRecord | undefined;
     if (latest && latest.localRevision === expectedLocalRevision &&
         latest.syncState !== 'conflict') {
       store.put({ ...latest, syncState: 'error', updatedAt: now });
@@ -396,10 +395,8 @@ export class RecipeLocalDb {
     const done = transactionDone(tx);
     const documents = tx.objectStore(STORES.documents);
     const outbox = tx.objectStore(STORES.outbox);
-    const current = (await requestResult(documents.get([accountId, resourceId])))
-      as LocalRecipeRecord | undefined;
-    const acknowledged = (await requestResult(outbox.get(mutationId)))
-      as OutboxMutation | undefined;
+    const current = (await requestResult(documents.get([accountId, resourceId]))) as LocalRecipeRecord | undefined;
+    const acknowledged = (await requestResult(outbox.get(mutationId))) as OutboxMutation | undefined;
 
     if (!current || !acknowledged || acknowledged.accountId !== accountId ||
         acknowledged.resourceId !== resourceId) {
@@ -561,8 +558,7 @@ export class RecipeLocalDb {
     const tx = this.#db.transaction(STORES.collectionBook, 'readwrite');
     const done = transactionDone(tx);
     const store = tx.objectStore(STORES.collectionBook);
-    const current = (await requestResult(store.get(accountId)))
-      as LocalCollectionBookRecord | undefined;
+    const current = (await requestResult(store.get(accountId))) as LocalCollectionBookRecord | undefined;
     if (current && current.localRevision === expectedLocalRevision &&
         current.syncState !== 'conflict') {
       store.put({ ...current, syncState: 'error', updatedAt: now });
@@ -584,10 +580,8 @@ export class RecipeLocalDb {
     const done = transactionDone(tx);
     const books = tx.objectStore(STORES.collectionBook);
     const outbox = tx.objectStore(STORES.collectionOutbox);
-    const current = (await requestResult(books.get(accountId)))
-      as LocalCollectionBookRecord | undefined;
-    const acknowledged = (await requestResult(outbox.get(mutationId)))
-      as CollectionOutboxMutation | undefined;
+    const current = (await requestResult(books.get(accountId))) as LocalCollectionBookRecord | undefined;
+    const acknowledged = (await requestResult(outbox.get(mutationId))) as CollectionOutboxMutation | undefined;
 
     if (!current || !acknowledged || acknowledged.accountId !== accountId) {
       await done;
@@ -641,8 +635,7 @@ export class RecipeLocalDb {
     );
     const done = transactionDone(tx);
     const books = tx.objectStore(STORES.collectionBook);
-    const latest = (await requestResult(books.get(record.accountId)))
-      as LocalCollectionBookRecord | undefined;
+    const latest = (await requestResult(books.get(record.accountId))) as LocalCollectionBookRecord | undefined;
     books.put({
       ...record,
       working: latest?.working ?? record.working,
