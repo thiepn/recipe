@@ -1,3 +1,4 @@
+import { canonicalJson } from '../workspace/canonical.ts';
 import type {
   RecipeCollectionBook,
   RecipeDocument,
@@ -298,6 +299,55 @@ export class RecipeLocalDb {
       this.listCollectionOutbox(accountId),
     ]);
     return recipes.length + collections.length;
+  }
+
+  /** Count locally authored pantry, plan and cooking data not yet acknowledged
+   * by the workspace cloud stream. These records would be erased on sign-out.
+   * No cloud feature flag is required to detect unsafe local-only data. */
+  async countUnsyncedWorkspace(accountId: string): Promise<number> {
+    const tx = this.#db.transaction(STORES.meta, 'readonly');
+    const rows = (await requestResult(
+      tx.objectStore(STORES.meta).index('by-account').getAll(accountId),
+    )) as MetaRecord[];
+    const meta = new Map(rows.map(row => [row.key, row.value]));
+    const resources = new Set<string>();
+    for (const key of meta.keys()) {
+      if (key === 'meal-plan-v1') resources.add('plan:main');
+      else if (key.startsWith('kitchen-session-v1:'))
+        resources.add('session:' + key.slice('kitchen-session-v1:'.length));
+      else if (key.startsWith('workspace-base-v1:'))
+        resources.add(key.slice('workspace-base-v1:'.length));
+    }
+    let pending = 0;
+    for (const resource of resources) {
+      const key = resource === 'plan:main' ? 'meal-plan-v1'
+        : 'kitchen-session-v1:' + resource.slice('session:'.length);
+      const local = meta.get(key) ?? null;
+      const base = meta.get('workspace-base-v1:' + resource);
+      if (base && typeof base === 'object' &&
+          'document' in base && 'revision' in base &&
+          Number.isSafeInteger(base.revision) && Number(base.revision) >= 0) {
+        if (canonicalJson(local) !== canonicalJson(base.document)) pending++;
+      } else if (local !== null) {
+        // A blank planner has no user work; any cooking session is user work.
+        const emptyPlan = resource === 'plan:main' && typeof local === 'object' &&
+          !Array.isArray(local) &&
+          Array.isArray((local as { entries?: unknown }).entries) &&
+          Array.isArray((local as { manualItems?: unknown }).manualItems) &&
+          Array.isArray((local as { purchased?: unknown }).purchased) &&
+          (local as { entries: unknown[] }).entries.length === 0 &&
+          (local as { manualItems: unknown[] }).manualItems.length === 0 &&
+          (local as { purchased: unknown[] }).purchased.length === 0;
+        if (!emptyPlan) pending++;
+      }
+    }
+    const pantry = meta.get('pantry-v1');
+    if (pantry && typeof pantry === 'object' && (
+      !Array.isArray((pantry as { ingredients?: unknown }).ingredients) ||
+      (pantry as { ingredients: unknown[] }).ingredients.length > 0 ||
+      (pantry as { assumeStaples?: unknown }).assumeStaples === true
+    )) pending++;
+    return pending;
   }
 
   async putMutation(mutation: OutboxMutation): Promise<void> {

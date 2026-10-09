@@ -206,6 +206,11 @@ export class KitchenSessionStore {
     return pending;
   }
 
+  /** Wait for all already queued cooking edits before a destructive sign-out. */
+  async flush(): Promise<void> {
+    await Promise.all([...this.#writes.values()]);
+  }
+
   clear(recipeId: string): Promise<void> {
     const pending = (this.#writes.get(recipeId) ?? Promise.resolve())
       .catch(() => undefined)

@@ -52,5 +52,7 @@ export async function removeRecipeMedia(
 }
 
 export async function clearRecipeMediaCache(accountId: string): Promise<void> {
-  await storage().delete(cacheName(accountId));
+  // In unsupported/private browser environments no Cache Storage exists.
+  if (!globalThis.caches) return;
+  await globalThis.caches.delete(cacheName(accountId));
 }
