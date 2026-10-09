@@ -5,6 +5,7 @@ import {
   ChefHat,
   ChevronRight,
   CircleAlert,
+  ShieldCheck,
   Clock3,
   Cloud,
   CloudOff,
@@ -48,6 +49,7 @@ import { createBlankRecipe } from '../library/create.ts';
 import { createImportedRecipe, importDuplicateCandidates, type ImportDraft, type ImportKind } from '../import/recipe-import.ts';
 import { ImportSheet } from './ImportSheet.tsx';
 import { RecipeStudio } from './RecipeStudio.tsx';
+import { RecoveryPanel } from './RecoveryPanel.tsx';
 import { CookWorkspace } from './CookWorkspace.tsx';
 import { RecipeWorkspaceSync, type WorkspaceConflict } from '../workspace/sync.ts';
 import { MealPlanner } from './MealPlanner.tsx';
@@ -696,6 +698,7 @@ export default function App() {
   const [signOutLocalWarning, setSignOutLocalWarning] = useState<number | null>(null);
   const [discardingLocalData, setDiscardingLocalData] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [recoveryOpen, setRecoveryOpen] = useState(false);
   const syncFlight = useRef<Promise<void> | null>(null);
   const [online, setOnline] = useState(() => globalThis.navigator?.onLine ?? true);
   const [syncAttempt, setSyncAttempt] = useState<SyncAttempt>('idle');
@@ -1183,6 +1186,13 @@ export default function App() {
             {online ? <Cloud size={17} /> : <WifiOff size={17} />}
             <span>{syncNotice.title}</span>
           </button>
+          <button type="button" className="recovery-sidebar-action"
+            onClick={() => { setRecoveryOpen(true); setMobileMenu(false); }}>
+            <ShieldCheck size={17}/>
+            <span>Backup & recovery</span>
+            {(syncHealth.blocked + syncHealth.conflicts > 0) &&
+              <strong>{syncHealth.blocked + syncHealth.conflicts}</strong>}
+          </button>
           {(library.recipeConflicts + library.collectionConflicts > 0) && (
             <span className="attention-row">
               <CircleAlert size={16} />
@@ -1250,12 +1260,18 @@ export default function App() {
                   <small>{syncHealth.queued} queued · {syncHealth.retrying} waiting to retry</small>
                 )}
               </div>
-              {syncNotice.canRetry && (
-                <button type="button" className="button button-secondary sync-recovery-action"
-                  onClick={() => void sync()} disabled={syncing || !online}>
-                  Retry sync
-                </button>
-              )}
+              <div className="sync-recovery-controls">
+                {(syncNotice.kind === 'blocked' || syncNotice.kind === 'conflict') && (
+                  <button type="button" className="button button-secondary sync-recovery-action"
+                    onClick={() => setRecoveryOpen(true)}>Review & recover</button>
+                )}
+                {syncNotice.canRetry && (
+                  <button type="button" className="button button-secondary sync-recovery-action"
+                    onClick={() => void sync()} disabled={syncing || !online}>
+                    Retry sync
+                  </button>
+                )}
+              </div>
             </section>
           )}
 
@@ -1749,6 +1765,19 @@ export default function App() {
         />
       )}
 
+      {recoveryOpen && runtime && (
+        <RecoveryPanel db={runtime.db} api={runtime.api}
+          accountId={runtime.accountId} syncBusy={syncing}
+          onClose={() => setRecoveryOpen(false)}
+          onRecovered={async () => {
+            await Promise.all([
+              reload(runtime),
+              refreshSyncHealth(runtime),
+            ]);
+            void sync(runtime);
+          }}
+        />
+      )}
       {workspaceConflicts.length>0&&runtime?.workspaceSync&&(
         <section className="workspace-conflicts" role="alert" aria-label="Recipe sync conflicts">
           <div className="workspace-conflict-heading">
