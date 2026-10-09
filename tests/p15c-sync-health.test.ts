@@ -37,6 +37,19 @@ describe('P15C reliable sync indicator', () => {
     })).toMatchObject({ kind: 'conflict', canRetry: false });
   });
 
+  it('retains blocked upload priority over workspace availability', () => {
+    const health = summarizeSyncHealth(['quarantined'], 0);
+    expect(describeSyncHealth(health, {
+      online: true, syncing: false, attempt: 'failed', workspaceStatus: 'offline',
+    }).kind).toBe('blocked');
+    expect(describeSyncHealth(EMPTY_SYNC_HEALTH, {
+      online: true, syncing: false, attempt: 'succeeded', workspaceStatus: 'conflict',
+    }).kind).toBe('conflict');
+    expect(describeSyncHealth(EMPTY_SYNC_HEALTH, {
+      online: true, syncing: false, attempt: 'succeeded', workspaceStatus: 'offline',
+    }).kind).toBe('unavailable');
+  });
+
   it('offers no inactive online retry button while offline or syncing', () => {
     const health = summarizeSyncHealth(['retry'], 0);
     expect(describeSyncHealth(health, {
@@ -55,7 +68,7 @@ describe('P15C reliable sync indicator', () => {
     const confirmed = describeSyncHealth(EMPTY_SYNC_HEALTH, {
       online: true, syncing: false, attempt: 'succeeded',
     });
-    expect(confirmed).toMatchObject({ kind: 'saved', title: 'Cookbook up to date' });
+    expect(confirmed).toMatchObject({ kind: 'saved', title: 'Recipes synced' });
     expect(describeSyncHealth(EMPTY_SYNC_HEALTH, {
       online: true, syncing: false, attempt: 'failed',
     })).toMatchObject({ kind: 'unavailable', canRetry: true, showBanner: true });
