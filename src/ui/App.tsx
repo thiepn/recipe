@@ -1779,6 +1779,8 @@ export default function App() {
               reload(runtime),
               refreshSyncHealth(runtime),
             ]);
+            setPantry(cleanPantry(await runtime.db.getMeta(runtime.accountId, 'pantry-v1')));
+            globalThis.dispatchEvent(new Event('recipe:workspace-changed'));
             void sync(runtime);
           }}
         />
