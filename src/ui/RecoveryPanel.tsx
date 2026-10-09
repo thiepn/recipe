@@ -17,11 +17,10 @@ interface ReviewData {
   failedCollections: CollectionOutboxMutation[];
 }
 
-type Selection = {
-  category: 'recipe' | 'collection';
-  id: string;
-  choice: ConflictChoice;
-} | null;
+type Selection = (
+  { category: 'recipe' | 'collection'; id: string; choice: ConflictChoice }
+  | { category: 'blocked-recipe' | 'blocked-collection'; id: string; choice: 'retry' }
+) | null;
 
 function newestPerRecipe(records: ConflictRecord[]): ConflictRecord[] {
   const seen = new Set<string>();
@@ -33,13 +32,14 @@ function newestPerRecipe(records: ConflictRecord[]): ConflictRecord[] {
 }
 
 export function RecoveryPanel({
-  db, api, accountId, onClose, onRecovered, syncBusy,
+  db, api, accountId, onClose, onRecovered, onEditRecipe, syncBusy,
 }: {
   db: RecipeLocalDb;
   api: RecipeCoreApi;
   accountId: string;
   onClose: () => void;
   onRecovered: () => Promise<void>;
+  onEditRecipe: (id: string) => void;
   syncBusy: boolean;
 }) {
   const [data, setData] = useState<ReviewData | null>(null);
@@ -94,7 +94,7 @@ export function RecoveryPanel({
         await resolveRecipeConflictSafely(
           db, api, accountId, record, local.localRevision, confirm.choice,
         );
-      } else {
+      } else if (confirm.category === 'collection') {
         const record = data.collections.find(item => item.id === confirm.id);
         if (!record) throw new Error('Collection conflict no longer exists');
         const local = await db.getCollectionBook(accountId);
@@ -102,6 +102,10 @@ export function RecoveryPanel({
         await resolveCollectionConflictSafely(
           db, api, accountId, record, local.localRevision, confirm.choice,
         );
+      } else if (confirm.category === 'blocked-recipe') {
+        await db.repairQuarantinedRecipe(accountId, confirm.id, crypto.randomUUID(), Date.now());
+      } else {
+        await db.repairQuarantinedCollection(accountId, crypto.randomUUID(), Date.now());
       }
       setConfirm(null);
       await refresh();
@@ -117,7 +121,9 @@ export function RecoveryPanel({
 
   const proposed = confirm?.category === 'recipe'
     ? data?.recipes.find(record => record.id === confirm.id)
-    : data?.collections.find(record => record.id === confirm?.id);
+    : confirm?.category === 'collection'
+      ? data?.collections.find(record => record.id === confirm.id)
+      : null;
 
   return (
     <div className="modal-layer" role="presentation">
@@ -218,14 +224,32 @@ export function RecoveryPanel({
               <article className="recovery-item recovery-item--blocked" key={item.mutationId}>
                 <strong>Recipe upload blocked</strong>
                 <p>Change {item.resourceId.slice(0, 8)} · {item.lastErrorCode ?? 'Unknown server rejection'}.
-                  This operation cannot be safely retried without correction.</p>
+                  The last upload was rejected. You can correct the local recipe and requeue its current draft.</p>
+                <div className="recovery-actions">
+                  <button type="button" className="button button-secondary"
+                    disabled={busy || syncBusy} onClick={() => onEditRecipe(item.resourceId)}>
+                    Edit local recipe
+                  </button>
+                  <button type="button" className="button button-secondary"
+                    disabled={busy || syncBusy}
+                    onClick={() => setConfirm({category:'blocked-recipe',id:item.resourceId,choice:'retry'})}>
+                    Requeue current draft
+                  </button>
+                </div>
               </article>
             ))}
             {data.failedCollections.map(item => (
               <article className="recovery-item recovery-item--blocked" key={item.mutationId}>
                 <strong>Collection upload blocked</strong>
                 <p>{item.lastErrorCode ?? 'Unknown server rejection'}.
-                  Export the local backup. The cloud has not confirmed these changes.</p>
+                  The local collection arrangement is preserved. Download a backup before requeuing it.</p>
+                <div className="recovery-actions">
+                  <button type="button" className="button button-secondary"
+                    disabled={busy || syncBusy}
+                    onClick={() => setConfirm({category:'blocked-collection',id:'collections',choice:'retry'})}>
+                    Requeue collections
+                  </button>
+                </div>
               </article>
             ))}
           </div>
@@ -234,10 +258,14 @@ export function RecoveryPanel({
           <div className="recovery-confirm" role="group" aria-label="Confirm conflict resolution">
             <strong>{confirm.choice === 'use-cloud'
               ? 'Replace your local version with the cloud version?'
-              : 'Submit this device’s version as a new cloud change?'}</strong>
+              : confirm.choice === 'retry'
+                ? 'Requeue the current local draft as a fresh upload?'
+                : 'Submit this device’s version as a new cloud change?'}</strong>
             <p>{confirm.choice === 'use-cloud'
               ? 'Local unsynced edits for this item will be discarded. Download a backup first.'
-              : 'Your existing device version will remain, and a fresh mutation will be queued. A newer cloud edit can still cause another conflict.'}
+              : confirm.choice === 'retry'
+                ? 'The rejected upload identifiers will be replaced by a new attempt containing your latest saved device draft. It may fail again if the original validation issue remains. Download a backup first.'
+                : 'Your existing device version will remain, and a fresh mutation will be queued. A newer cloud edit can still cause another conflict.'}
               {proposed ? ' The cloud revision will be verified again before applying.' : ''}</p>
             <div className="recovery-actions">
               <button type="button" className="button button-secondary"
