@@ -117,6 +117,28 @@ interface MetaRecord {
   value: unknown;
 }
 
+export interface RestoreCandidate {
+  accountId: string;
+  documents: Array<{
+    resourceId: string;
+    working: RecipeEditableDocument;
+    serverRevision: number;
+    tombstone: boolean;
+  }>;
+  collection: {
+    working: RecipeEditableCollectionBook;
+    serverRevision: number;
+  } | null;
+  metadata: Array<{ key: string; value: unknown }>;
+}
+
+export interface RestoreResult {
+  recipes: number;
+  collections: number;
+  metadata: number;
+  skipped: number;
+}
+
 export interface RecipeAccountBackup {
   format: 'thiepn-recipe-local-backup';
   schemaVersion: 1;
@@ -987,6 +1009,119 @@ export class RecipeLocalDb {
       await done;
     } catch (error) {
       try { tx.abort(); } catch { /* transaction already closed */ }
+      void done.catch(() => undefined);
+      throw error;
+    }
+  }
+
+  /**
+   * Rebuild only *missing* account data. All existing documents, cloud state,
+   * mutation receipts, conflicts and cursor remain untouched. Restored dirty
+   * recipes receive new mutation IDs, never replay an old backup receipt.
+   */
+  async restoreMissingFromBackup(
+    candidate: RestoreCandidate,
+    randomUUID: () => string = () => crypto.randomUUID(),
+    now: () => number = Date.now,
+  ): Promise<RestoreResult> {
+    const accountId = candidate.accountId;
+    const tx = this.#db.transaction(
+      [STORES.documents, STORES.outbox, STORES.collectionBook,
+       STORES.collectionOutbox, STORES.meta], 'readwrite',
+    );
+    const done = transactionDone(tx);
+    const result: RestoreResult = { recipes: 0, collections: 0, metadata: 0, skipped: 0 };
+    try {
+      const docs = tx.objectStore(STORES.documents);
+      const outbox = tx.objectStore(STORES.outbox);
+      const books = tx.objectStore(STORES.collectionBook);
+      const collectionsOutbox = tx.objectStore(STORES.collectionOutbox);
+      const meta = tx.objectStore(STORES.meta);
+      const seen = new Set<string>();
+      for (const row of candidate.documents) {
+        const working = recipeEditableDocumentSchema.parse(row.working);
+        if (seen.has(row.resourceId) || row.resourceId !== working.recipe.id ||
+            working.version.recipeId !== row.resourceId ||
+            !Number.isSafeInteger(row.serverRevision) || row.serverRevision < 0)
+          throw new Error('Invalid recovery recipe. No items were imported.');
+        seen.add(row.resourceId);
+        if (await requestResult(docs.get([accountId, row.resourceId]))) {
+          result.skipped++;
+          continue;
+        }
+        if (row.tombstone && row.serverRevision === 0) {
+          result.skipped++;
+          continue;
+        }
+        const mutationId = randomUUID();
+        if (await requestResult(outbox.get(mutationId)))
+          throw new Error('Recovery mutation ID collision.');
+        const operation: OutboxMutation['operation'] = row.tombstone
+          ? 'delete' : row.serverRevision > 0 ? 'replace' : 'create';
+        docs.put({
+          accountId, resourceId: row.resourceId, working,
+          base: null, serverRevision: row.serverRevision,
+          localRevision: 1, syncState: 'pending', tombstone: row.tombstone,
+          updatedAt: now(),
+        } satisfies LocalRecipeRecord);
+        outbox.put({
+          mutationId, accountId, resourceId: row.resourceId,
+          baseRevision: row.serverRevision, operation,
+          document: row.tombstone ? null : working,
+          state: 'pending', attempts: 0, createdAt: now(),
+          lastAttemptAt: null, lastErrorCode: null,
+        } satisfies OutboxMutation);
+        result.recipes++;
+      }
+      if (candidate.collection) {
+        const working = recipeEditableCollectionBookSchema.parse(candidate.collection.working);
+        const revision = candidate.collection.serverRevision;
+        if (!Number.isSafeInteger(revision) || revision < 0)
+          throw new Error('Invalid recovered collection revision.');
+        if (await requestResult(books.get(accountId))) {
+          result.skipped++;
+        } else {
+          const mutationId = randomUUID();
+          if (await requestResult(collectionsOutbox.get(mutationId)))
+            throw new Error('Collection recovery mutation ID collision.');
+          books.put({
+            accountId, working, base: null, serverRevision: revision,
+            localRevision: 1, syncState: 'pending', updatedAt: now(),
+          } satisfies LocalCollectionBookRecord);
+          collectionsOutbox.put({
+            accountId, mutationId, baseRevision: revision,
+            document: working, state: 'pending', attempts: 0, createdAt: now(),
+            lastAttemptAt: null, lastErrorCode: null,
+          } satisfies CollectionOutboxMutation);
+          result.collections++;
+        }
+      }
+      const metaKeys = new Set<string>();
+      for (const row of candidate.metadata) {
+        if (metaKeys.has(row.key))
+          throw new Error('Duplicate metadata in recovery file.');
+        metaKeys.add(row.key);
+        if (row.key !== 'pantry-v1' && row.key !== 'meal-plan-v1' &&
+            !row.key.startsWith('kitchen-session-v1:'))
+          throw new Error('Unsupported backup metadata. Refusing recovery.');
+        if (await requestResult(meta.get([accountId, row.key]))) {
+          result.skipped++;
+          continue;
+        }
+        if (row.key.startsWith('kitchen-session-v1:')) {
+          const resourceId = row.key.slice('kitchen-session-v1:'.length);
+          if (!await requestResult(docs.get([accountId, resourceId]))) {
+            result.skipped++;
+            continue;
+          }
+        }
+        meta.put({accountId,key:row.key,value:row.value} satisfies MetaRecord);
+        result.metadata++;
+      }
+      await done;
+      return result;
+    } catch (error) {
+      try { tx.abort(); } catch { /* already inactive */ }
       void done.catch(() => undefined);
       throw error;
     }

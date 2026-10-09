@@ -3394,3 +3394,68 @@ body {
     justify-content: flex-start;
   }
 }
+
+/* P15E — backup restoration is an explicit local-only review, not an upload. */
+.recovery-import {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin: 12px 0 18px;
+  padding: 17px 0;
+  border-top: 1px solid var(--line);
+}
+.recovery-import strong,
+.recovery-import-review strong {
+  display: block;
+  font-size: .92rem;
+}
+.recovery-import p,
+.recovery-import-review p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: .84rem;
+  line-height: 1.5;
+}
+.recovery-file-label {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 13px;
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: .82rem;
+}
+.recovery-file-label:hover { background: var(--surface-2); }
+.recovery-file-label:focus-within { outline: 3px solid rgb(216 98 53 / 28%); }
+.recovery-file-label input {
+  position: absolute;
+  width: 1px; height: 1px; opacity: 0;
+  overflow: hidden;
+}
+.recovery-import-review {
+  margin: 12px 0 20px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--green);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.recovery-import-review p:last-of-type { margin-bottom: 14px; }
+.recovery-success {
+  border-left: 3px solid var(--green);
+  background: var(--surface-2);
+  padding: 10px 12px;
+  color: var(--ink);
+  font-size: .83rem;
+  line-height: 1.45;
+}
+@media (max-width: 620px) {
+  .recovery-import { flex-direction: column; align-items: stretch; }
+  .recovery-file-label { align-self: flex-start; }
+}
