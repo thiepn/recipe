@@ -52,7 +52,12 @@ export async function readSyncHealth(db: RecipeLocalDb, accountId: string): Prom
 
 export function describeSyncHealth(
   health: SyncHealth,
-  options: { online: boolean; syncing: boolean; attempt: SyncAttempt },
+  options: {
+    online: boolean;
+    syncing: boolean;
+    attempt: SyncAttempt;
+    workspaceStatus?: 'disabled' | 'ready' | 'offline' | 'conflict';
+  },
 ): SyncNotice {
   if (!options.online) return {
     kind: 'offline',
@@ -67,6 +72,16 @@ export function describeSyncHealth(
     kind: 'syncing', title: 'Checking your cookbook',
     detail: 'Sending saved changes and checking for updates. You can continue cooking.',
     canRetry: false, showBanner: health.total > 0,
+  };
+  if (options.workspaceStatus === 'conflict') return {
+    kind: 'conflict', title: 'Meal plan or cooking conflict',
+    detail: 'Changes from another device need review. The local workspace remains available.',
+    canRetry: false, showBanner: true,
+  };
+  if (options.workspaceStatus === 'offline' && options.attempt !== 'idle') return {
+    kind: 'unavailable', title: 'Workspace cloud unavailable',
+    detail: 'Recipe and collection sync may still work. Meal plans and cooking sessions stay on this device.',
+    canRetry: true, showBanner: true,
   };
   if (health.blocked > 0) return {
     kind: 'blocked', title: 'Some changes need attention',
@@ -95,7 +110,7 @@ export function describeSyncHealth(
   };
   return {
     kind: 'saved',
-    title: options.attempt === 'succeeded' ? 'Cookbook up to date' : 'Saved on this device',
+    title: options.attempt === 'succeeded' ? 'Recipes synced' : 'Saved on this device',
     detail: options.attempt === 'succeeded'
       ? 'No pending recipe or collection uploads. Pantry and cooking plans may still be device-only.'
       : 'Cloud status has not yet been checked. Recipes remain on this device.',
