@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { CircleAlert, Download, RefreshCw, X } from 'lucide-react';
+import { CircleAlert, Download, RefreshCw, Upload, X } from 'lucide-react';
+import { inspectBackupText, MAX_BACKUP_BYTES, type BackupImportPreview } from '../recovery/backup-import.ts';
 import type {
   CollectionConflictRecord, ConflictRecord, RecipeLocalDb,
   CollectionOutboxMutation, OutboxMutation,
@@ -46,6 +47,8 @@ export function RecoveryPanel({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<Selection>(null);
+  const [backupPreview, setBackupPreview] = useState<BackupImportPreview | null>(null);
+  const [restoreResult, setRestoreResult] = useState<string | null>(null);
   const refresh = useCallback(async (): Promise<ReviewData> => {
     const [recipes, collections, recipeOutbox, collectionOutbox] = await Promise.all([
       db.listConflicts(accountId), db.listCollectionConflicts(accountId),
@@ -77,6 +80,41 @@ export function RecoveryPanel({
       downloadBackup(snapshot);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not create backup');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const inspectFile = async (file: File | undefined) => {
+    setBackupPreview(null);
+    setRestoreResult(null);
+    if (!file) return;
+    setError(null);
+    if (busy || syncBusy) return;
+    setBusy(true);
+    try {
+      if (file.size > MAX_BACKUP_BYTES)
+        throw new Error('Recovery files must be 12 MB or smaller.');
+      const content = await file.text();
+      setBackupPreview(inspectBackupText(content, accountId));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'The recovery file is invalid.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const restoreMissing = async () => {
+    if (!backupPreview || busy || syncBusy) return;
+    setBusy(true); setError(null);
+    try {
+      const result = await db.restoreMissingFromBackup(backupPreview.candidate);
+      setBackupPreview(null);
+      setRestoreResult(`Recovered ${result.recipes} recipe(s), ${result.collections} collection set(s) and ${result.metadata} device item(s). Skipped ${result.skipped} item(s) already present.`);
+      await refresh();
+      await onRecovered();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Restore failed; no existing work was overwritten.');
     } finally {
       setBusy(false);
     }
@@ -152,7 +190,48 @@ export function RecoveryPanel({
             disabled={busy}><Download size={16}/> Download backup</button>
         </div>
         <p className="recovery-private-note">The file can contain private recipe and household information.
-          Store it securely. Automatic restore from this file is not yet available.</p>
+          Store it securely. Do not share it publicly.</p>
+        <div className="recovery-import">
+          <div>
+            <strong>Review a recovery file</strong>
+            <p>Choose a previously exported JSON backup from this same account.
+              It will be checked locally before any data is written.</p>
+          </div>
+          <label className="recovery-file-label">
+            <Upload size={16} /> Choose JSON backup
+            <input type="file" accept=".json,application/json"
+              disabled={busy || syncBusy}
+              onChange={event => {
+                const file = event.currentTarget.files?.[0];
+                event.currentTarget.value = '';
+                void inspectFile(file);
+              }} />
+          </label>
+        </div>
+        {backupPreview && (
+          <section className="recovery-import-review" aria-label="Review backup restore">
+            <strong>Review before restoring</strong>
+            <p>Exported {new Date(backupPreview.exportedAt).toLocaleString()}.
+              Candidate recovery: {backupPreview.candidate.documents.length} unsent recipe(s),
+              {backupPreview.candidate.collection ? ' 1 collection set' : ' no collection set'},
+              and {backupPreview.candidate.metadata.length} device-only item(s).
+              {backupPreview.skippedCloudSynced} cloud-synced recipe(s) and
+              {backupPreview.ignoredMetadata} system metadata item(s) excluded.</p>
+            <p>Only data missing on this device will be restored. Existing records will
+              never be overwritten. Pending recipe changes may need cloud conflict review
+              after upload. This does not import old cloud cursors, conflict records,
+              or mutation receipts.</p>
+            <div className="recovery-actions">
+              <button type="button" className="button button-secondary"
+                disabled={busy} onClick={() => setBackupPreview(null)}>Cancel</button>
+              <button type="button" className="button button-primary"
+                disabled={busy || syncBusy} onClick={() => void restoreMissing()}>
+                {busy ? 'Restoring…' : 'Restore missing items'}
+              </button>
+            </div>
+          </section>
+        )}
+        {restoreResult && <p className="recovery-success" role="status">{restoreResult}</p>}
         {error && <p className="recovery-error" role="alert">{error}</p>}
         {!data ? <p className="recovery-empty">Reading local recovery records…</p> : (
           <div className="recovery-items">
