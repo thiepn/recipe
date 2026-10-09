@@ -3213,3 +3213,184 @@ body {
     margin-top: 2px;
   }
 }
+
+/* P15D — account recovery controls use existing Recipe typography and surfaces. */
+.recovery-sidebar-action {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  text-align: left;
+  font-size: .84rem;
+  color: var(--muted);
+}
+.recovery-sidebar-action:hover,
+.recovery-sidebar-action:focus-visible {
+  background: var(--surface-2);
+}
+.recovery-sidebar-action strong {
+  margin-left: auto;
+  font-size: .75rem;
+  color: #a24a29;
+}
+.sync-recovery-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.recovery-sheet {
+  width: min(740px, calc(100vw - 32px));
+  max-height: min(90dvh, 940px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.recovery-description {
+  max-width: 66ch;
+  margin-bottom: 20px;
+  font-size: .9rem;
+  line-height: 1.55;
+  color: var(--muted);
+}
+.recovery-backup {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.recovery-backup strong {
+  font-size: .96rem;
+}
+.recovery-backup p,
+.recovery-item p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: .84rem;
+  line-height: 1.45;
+}
+.recovery-backup button {
+  white-space: nowrap;
+}
+.recovery-private-note {
+  margin: 11px 0 20px;
+  color: var(--muted);
+  font-size: .77rem;
+  line-height: 1.45;
+}
+.recovery-items {
+  display: grid;
+  gap: 12px;
+  margin-block: 14px 22px;
+}
+.recovery-item {
+  padding: 17px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.recovery-item-heading {
+  display: flex;
+  align-items: start;
+  gap: 10px;
+}
+.recovery-item-heading > svg {
+  margin-top: 2px;
+  color: #a24a29;
+  flex-shrink: 0;
+}
+.recovery-item-heading strong,
+.recovery-item--blocked > strong {
+  display: block;
+  font-size: .92rem;
+}
+.recovery-item-heading small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: .75rem;
+}
+.recovery-comparison {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 12px;
+  margin: 14px 0;
+}
+.recovery-comparison > div {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.recovery-comparison span {
+  display: block;
+  margin-bottom: 5px;
+  font-size: .75rem;
+  color: var(--muted);
+}
+.recovery-comparison strong {
+  display: block;
+  font-size: .85rem;
+  overflow-wrap: anywhere;
+}
+.recovery-actions,
+.recovery-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px;
+}
+.recovery-footer {
+  justify-content: space-between;
+  border-top: 1px solid var(--line);
+  padding-top: 17px;
+}
+.recovery-confirm {
+  padding: 16px;
+  margin-bottom: 18px;
+  border: 1px solid #d9b7a1;
+  border-left: 3px solid #b45c32;
+  background: var(--surface-2);
+  border-radius: 8px;
+}
+.recovery-confirm strong {
+  display: block;
+  font-size: .92rem;
+}
+.recovery-confirm p {
+  margin-block: 8px 14px;
+  color: var(--muted);
+  font-size: .84rem;
+  line-height: 1.5;
+}
+.recovery-error {
+  padding: 10px 12px;
+  border-left: 3px solid #ad5d36;
+  background: var(--surface-2);
+  font-size: .84rem;
+}
+.recovery-empty,
+.recovery-manual {
+  color: var(--muted);
+  font-size: .84rem;
+}
+@media (max-width: 620px) {
+  .recovery-backup {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .recovery-comparison {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sync-recovery-controls {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+}
