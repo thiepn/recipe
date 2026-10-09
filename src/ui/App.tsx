@@ -77,6 +77,7 @@ import {
 } from '../data/local-db.ts';
 import { CollectionSyncEngine } from '../sync/collection-sync.ts';
 import { RecipeSyncEngine } from '../sync/recipe-sync.ts';
+import { describeSyncHealth, EMPTY_SYNC_HEALTH, readSyncHealth, type SyncAttempt } from '../sync/health.ts';
 import { legacyCookbookRedirect, sectionForPath, sectionPath, type Section } from './navigation.ts';
 import './styles.css';
 
@@ -695,6 +696,10 @@ export default function App() {
   const [signOutLocalWarning, setSignOutLocalWarning] = useState<number | null>(null);
   const [discardingLocalData, setDiscardingLocalData] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const syncFlight = useRef<Promise<void> | null>(null);
+  const [online, setOnline] = useState(() => globalThis.navigator?.onLine ?? true);
+  const [syncAttempt, setSyncAttempt] = useState<SyncAttempt>('idle');
+  const [syncHealth, setSyncHealth] = useState(EMPTY_SYNC_HEALTH);
   const [workspaceConflicts, setWorkspaceConflicts] = useState<WorkspaceConflict[]>([]);
   const [workspaceStatus, setWorkspaceStatus] = useState<'disabled'|'ready'|'offline'|'conflict'>(
     WORKSPACE_SYNC_ENABLED?'offline':'disabled'
@@ -770,36 +775,66 @@ export default function App() {
     });
   }, []);
 
+  const refreshSyncHealth = useCallback(async (activeRuntime: Runtime) => {
+    const snapshot = await readSyncHealth(activeRuntime.db, activeRuntime.accountId);
+    setSyncHealth(snapshot);
+    return snapshot;
+  }, []);
+
   const sync = useCallback(
-    async (activeRuntime = runtime) => {
-      if (!activeRuntime || syncing) return;
-      setSyncing(true);
-      try {
-        await Promise.all([
-          activeRuntime.recipeSync.syncOnce(),
-          activeRuntime.collectionSync.syncOnce(),
-        ]);
-        if(activeRuntime.workspaceSync){
-          try{
-            const report=await activeRuntime.workspaceSync.syncOnce();
-            setWorkspaceConflicts(report.conflicts);
-            setWorkspaceStatus(report.conflicts.length?'conflict':'ready');
-            if(report.pulled>0)
-              globalThis.dispatchEvent(new Event('recipe:workspace-changed'));
-          }catch{
-            setWorkspaceStatus('offline');
-            setToast('Recipe workspace cloud is unavailable. Local edits are retained.');
-          }
-        }
-        await reload(activeRuntime);
-      } catch {
-        setToast('Cloud sync is unavailable. Local changes remain safe.');
-      } finally {
-        setSyncing(false);
+    (activeRuntime = runtime): Promise<void> => {
+      if (!activeRuntime) return Promise.resolve();
+      // A stable in-flight lock also protects automatic online/focus/timer
+      // triggers; state updates are not synchronous and must not be the lock.
+      if (syncFlight.current) return syncFlight.current;
+      if (!globalThis.navigator.onLine) {
+        setOnline(false);
+        return refreshSyncHealth(activeRuntime).then(() => undefined).catch(() => undefined);
       }
+      setOnline(true);
+      setSyncing(true);
+      const work = (async () => {
+        let failed = false;
+        try {
+          await refreshSyncHealth(activeRuntime);
+          const results = await Promise.allSettled([
+            activeRuntime.recipeSync.syncOnce(),
+            activeRuntime.collectionSync.syncOnce(),
+          ]);
+          failed = results.some(result => result.status === 'rejected');
+          if (activeRuntime.workspaceSync) {
+            try {
+              const report = await activeRuntime.workspaceSync.syncOnce();
+              setWorkspaceConflicts(report.conflicts);
+              setWorkspaceStatus(report.conflicts.length ? 'conflict' : 'ready');
+              if (report.pulled > 0)
+                globalThis.dispatchEvent(new Event('recipe:workspace-changed'));
+            } catch {
+              failed = true;
+              setWorkspaceStatus('offline');
+            }
+          }
+          await reload(activeRuntime);
+        } catch {
+          failed = true;
+        } finally {
+          setSyncAttempt(failed ? 'failed' : 'succeeded');
+          await refreshSyncHealth(activeRuntime).catch(() => {
+            setSyncAttempt('failed');
+          });
+          setSyncing(false);
+        }
+      })();
+      const tracked = work.finally(() => { syncFlight.current = null; });
+      syncFlight.current = tracked;
+      return tracked;
     },
-    [reload, runtime, syncing],
+    [reload, runtime, refreshSyncHealth],
   );
+
+  const syncNotice = describeSyncHealth(syncHealth, {
+    online, syncing, attempt: syncAttempt,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -867,6 +902,7 @@ export default function App() {
         };
 
         await reload(nextRuntime);
+        await refreshSyncHealth(nextRuntime);
         const savedPantry = cleanPantry(await db.getMeta<unknown>(identity.userId, 'pantry-v1'));
         if (!cancelled) {
           setPantry(savedPantry);
@@ -877,26 +913,37 @@ export default function App() {
           setBootState('ready');
         }
 
-        void Promise.all([
-          recipeSync.syncOnce(),
-          collectionSync.syncOnce(),
-        ])
-          .then(async()=>{
-            if(nextRuntime.workspaceSync){
-              try{
-                const result=await nextRuntime.workspaceSync.syncOnce();
-                if(!cancelled){
-                  setWorkspaceConflicts(result.conflicts);
-                  setWorkspaceStatus(result.conflicts.length?'conflict':'ready');
-                  if(result.pulled>0)globalThis.dispatchEvent(new Event('recipe:workspace-changed'));
-                }
-              }catch{
-                if(!cancelled)setWorkspaceStatus('offline');
+        // Initial cloud qualification runs separately from local boot. A failure
+        // must not hide the UI or claim that unsent changes are cloud-backed.
+        if (globalThis.navigator.onLine) {
+          void Promise.allSettled([
+            recipeSync.syncOnce(),
+            collectionSync.syncOnce(),
+          ]).then(async results => {
+            if (cancelled) return;
+            let failed = results.some(result => result.status === 'rejected');
+            if (nextRuntime.workspaceSync) {
+              try {
+                const result = await nextRuntime.workspaceSync.syncOnce();
+                if (cancelled) return;
+                setWorkspaceConflicts(result.conflicts);
+                setWorkspaceStatus(result.conflicts.length ? 'conflict' : 'ready');
+                if (result.pulled > 0)
+                  globalThis.dispatchEvent(new Event('recipe:workspace-changed'));
+              } catch {
+                failed = true;
+                if (!cancelled) setWorkspaceStatus('offline');
               }
             }
-            if(!cancelled)await reload(nextRuntime);
-          })
-          .catch(() => undefined);
+            if (!cancelled) {
+              setSyncAttempt(failed ? 'failed' : 'succeeded');
+              await reload(nextRuntime);
+              await refreshSyncHealth(nextRuntime);
+            }
+          }).catch(() => {
+            if (!cancelled) setSyncAttempt('failed');
+          });
+        }
       } catch (error) {
         if (!cancelled) {
           setBootError(error instanceof Error ? error.message : 'Startup failed');
@@ -909,7 +956,7 @@ export default function App() {
       cancelled = true;
       activeDb?.close();
     };
-  }, [reload]);
+  }, [reload, refreshSyncHealth]);
 
   useEffect(() => {
     // Keep the previous /recipes deep link functional, but make / canonical.
@@ -924,17 +971,24 @@ export default function App() {
 
   useEffect(() => {
     if (!runtime) return;
-    const onOnline = () => void sync(runtime);
+    const onOnline = () => { setOnline(true); void sync(runtime); };
+    const onOffline = () => { setOnline(false); void refreshSyncHealth(runtime); };
     globalThis.addEventListener('online', onOnline);
-    const timer = globalThis.setInterval(() => void sync(runtime), 30_000);
-    const onFocus=()=>{if(document.visibilityState==='visible')void sync(runtime);};
-    document.addEventListener('visibilitychange',onFocus);
+    globalThis.addEventListener('offline', onOffline);
+    const timer = globalThis.setInterval(() => {
+      if (globalThis.navigator.onLine) void sync(runtime);
+    }, 30_000);
+    const onFocus = () => {
+      if (document.visibilityState === 'visible') void sync(runtime);
+    };
+    document.addEventListener('visibilitychange', onFocus);
     return () => {
       globalThis.removeEventListener('online', onOnline);
+      globalThis.removeEventListener('offline', onOffline);
       globalThis.clearInterval(timer);
-      document.removeEventListener('visibilitychange',onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
     };
-  }, [runtime, sync]);
+  }, [runtime, sync, refreshSyncHealth]);
 
   const navigate = (next: Section) => {
     setSection(next);
@@ -995,8 +1049,11 @@ export default function App() {
     transform: (current: LocalRecipeRecord['working']) => LocalRecipeRecord['working'],
   ) => {
     if (!runtime) return;
-    await runtime.recipeSync.stageReplace(transform(record.working));
+    const current = await runtime.db.getDocument(runtime.accountId, record.resourceId);
+    if (!current) throw new Error('Recipe is no longer available on this device.');
+    await runtime.recipeSync.stageReplace(transform(current.working));
     await reload(runtime);
+    await refreshSyncHealth(runtime);
     void sync(runtime);
   };
 
@@ -1007,6 +1064,7 @@ export default function App() {
     const document = await createImportedRecipe(draft, { locale: navigator.language });
     await runtime.recipeSync.stageCreate(document);
     await reload(runtime);
+    await refreshSyncHealth(runtime);
     setSelectedRecipeId(document.recipe.id);
     void sync(runtime);
     return 'saved';
@@ -1016,6 +1074,7 @@ export default function App() {
     if (!runtime) return;
     await runtime.collectionSync.stageReplace(book);
     await reload(runtime);
+    await refreshSyncHealth(runtime);
     void sync(runtime);
   };
 
@@ -1114,13 +1173,12 @@ export default function App() {
             className="sync-status"
             type="button"
             onClick={() => void sync()}
-            title="Sync now"
+            title={syncNotice.canRetry ? 'Check cloud updates now' : syncNotice.detail}
+            aria-label={syncNotice.canRetry ? 'Retry cookbook sync' : syncNotice.title}
+            disabled={syncing || !online}
           >
-            {navigator.onLine ? <Cloud size={17} /> : <WifiOff size={17} />}
-            <span>{syncing?'Syncing…':!navigator.onLine?'Offline':
-              workspaceStatus==='conflict'?'Workspace conflict':
-              workspaceStatus==='ready'?'Workspace synced':
-              workspaceStatus==='offline'?'Cloud unavailable':'Saved locally'}</span>
+            {online ? <Cloud size={17} /> : <WifiOff size={17} />}
+            <span>{syncNotice.title}</span>
           </button>
           {(library.recipeConflicts + library.collectionConflicts > 0) && (
             <span className="attention-row">
@@ -1174,6 +1232,29 @@ export default function App() {
         </header>
 
         <div className="page">
+          {syncNotice.showBanner && (
+            <section className={`sync-recovery sync-recovery--${syncNotice.kind}`}
+              aria-label="Cookbook sync status" role="status" aria-live="polite">
+              <div className="sync-recovery-icon" aria-hidden="true">
+                {!online ? <WifiOff size={18} /> :
+                  syncNotice.kind === 'blocked' || syncNotice.kind === 'conflict'
+                    ? <CircleAlert size={18} /> : <CloudOff size={18} />}
+              </div>
+              <div className="sync-recovery-copy">
+                <strong>{syncNotice.title}</strong>
+                <p>{syncNotice.detail}</p>
+                {(syncHealth.queued + syncHealth.retrying > 0) && (
+                  <small>{syncHealth.queued} queued · {syncHealth.retrying} waiting to retry</small>
+                )}
+              </div>
+              {syncNotice.canRetry && (
+                <button type="button" className="button button-secondary sync-recovery-action"
+                  onClick={() => void sync()} disabled={syncing || !online}>
+                  Retry sync
+                </button>
+              )}
+            </section>
+          )}
 
           {section === 'recipes' && (
             <section className="cookbook-page" aria-labelledby="cookbook-title">
