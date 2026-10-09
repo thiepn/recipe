@@ -73,16 +73,6 @@ export function describeSyncHealth(
     detail: 'Sending saved changes and checking for updates. You can continue cooking.',
     canRetry: false, showBanner: health.total > 0,
   };
-  if (options.workspaceStatus === 'conflict') return {
-    kind: 'conflict', title: 'Meal plan or cooking conflict',
-    detail: 'Changes from another device need review. The local workspace remains available.',
-    canRetry: false, showBanner: true,
-  };
-  if (options.workspaceStatus === 'offline' && options.attempt !== 'idle') return {
-    kind: 'unavailable', title: 'Workspace cloud unavailable',
-    detail: 'Recipe and collection sync may still work. Meal plans and cooking sessions stay on this device.',
-    canRetry: true, showBanner: true,
-  };
   if (health.blocked > 0) return {
     kind: 'blocked', title: 'Some changes need attention',
     detail: `${health.blocked} change(s) cannot be uploaded automatically. Your local copy is retained. Do not sign out until these are resolved.`,
@@ -92,6 +82,16 @@ export function describeSyncHealth(
     kind: 'conflict', title: 'Versions need review',
     detail: `${health.conflicts} conflict(s) need resolution. The local versions remain on this device. Avoid signing out.`,
     canRetry: health.queued + health.retrying > 0, showBanner: true,
+  };
+  if (options.workspaceStatus === 'conflict') return {
+    kind: 'conflict', title: 'Meal plan or cooking conflict',
+    detail: 'Changes from another device need review. The local workspace remains available.',
+    canRetry: false, showBanner: true,
+  };
+  if (options.workspaceStatus === 'offline' && options.attempt !== 'idle') return {
+    kind: 'unavailable', title: 'Workspace cloud unavailable',
+    detail: 'Recipe and collection sync may still work. Meal plans and cooking sessions stay on this device.',
+    canRetry: true, showBanner: true,
   };
   if (health.retrying > 0) return {
     kind: 'retrying', title: 'Upload interrupted',
