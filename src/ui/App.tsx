@@ -304,7 +304,7 @@ export function RecipeCard({
   );
 }
 
-function AddSheet({
+export function AddSheet({
   open,
   onClose,
   onCreate,
@@ -416,7 +416,7 @@ function AddSheet({
   );
 }
 
-function CollectionPicker({
+export function CollectionPicker({
   recipeId,
   book,
   onChange,
