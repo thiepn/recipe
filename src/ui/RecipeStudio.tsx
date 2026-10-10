@@ -1,4 +1,5 @@
 import { useEffect,useMemo,useState } from 'react';
+import { useAccessibleDialog } from './useAccessibleDialog.ts';
 import { ArrowDown, ArrowLeft, ArrowUp, Check, Clock3, Plus, Trash2 } from 'lucide-react';
 import type { RecipeEditableDocument } from '../api/protocol.ts';
 import type { LocalRecipeRecord } from '../data/local-db.ts';
@@ -23,6 +24,7 @@ export function RecipeStudio({record,onClose,onSave}:Props) {
     dietaryTags:record.working.version.dietaryTags.join(', '),
   });
   const [saving,setSaving]=useState(false);
+  const dialogRef=useAccessibleDialog<HTMLDivElement>(true,null,{focusOnMount:false});
   const [error,setError]=useState('');
   const original=record.working;
   const hasChanges=useMemo(()=>
@@ -85,7 +87,7 @@ export function RecipeStudio({record,onClose,onSave}:Props) {
   const field=(id:string,title:string)=>({id,title});
   const items=document.ingredients;
   const steps=document.steps;
-  return <div className="recipe-studio" role="dialog" aria-modal="true" aria-labelledby="studio-title">
+  return <div ref={dialogRef} tabIndex={-1} className="recipe-studio" role="dialog" aria-modal="true" aria-labelledby="studio-title">
     <header className="studio-topbar">
       <button className="studio-back" type="button" onClick={close} disabled={saving}>
         <ArrowLeft size={19}/> <span>Back to recipe</span>

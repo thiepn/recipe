@@ -56,6 +56,8 @@ import { CookWorkspace } from './CookWorkspace.tsx';
 import { RecipeWorkspaceSync, type WorkspaceConflict } from '../workspace/sync.ts';
 import { MealPlanner } from './MealPlanner.tsx';
 import { HouseholdSharing } from './HouseholdSharing.tsx';
+import { useAccessibleDialog } from './useAccessibleDialog.ts';
+import { createExclusiveActionGate } from './exclusive-action.ts';
 import { CookingIntelligence } from './CookingIntelligence.tsx';
 import { cleanCookingPreferences, DEFAULT_COOKING_PREFERENCES, type CookingPreferences } from '../intelligence/suggestions.ts';
 import { LunaSheet } from './LunaSheet.tsx';
@@ -303,7 +305,7 @@ export function RecipeCard({
   );
 }
 
-function AddSheet({
+export function AddSheet({
   open,
   onClose,
   onCreate,
@@ -318,6 +320,7 @@ function AddSheet({
 }) {
   const [title, setTitle] = useState('');
   const [saving, setSaving] = useState(false);
+  const dialogRef = useAccessibleDialog<HTMLElement>(open, onClose, {busy:saving, initialFocus:'#recipe-title'});
 
   useEffect(() => {
     if (!open) {
@@ -329,8 +332,9 @@ function AddSheet({
   if (!open) return null;
 
   return (
-    <div className="modal-layer" role="presentation" onMouseDown={onClose}>
+    <div className="modal-layer" role="presentation" onMouseDown={() => {if (!saving) onClose();}}>
       <section
+        ref={dialogRef} tabIndex={-1}
         className="sheet add-sheet"
         role="dialog"
         aria-modal="true"
@@ -343,12 +347,13 @@ function AddSheet({
             <p className="eyebrow">Capture</p>
             <h2 id="add-title">Add a recipe</h2>
           </div>
-          <button className="icon-button" onClick={onClose} aria-label="Close">
+          <button className="icon-button" type="button" onClick={onClose} aria-label="Close" disabled={saving}>
             <X size={21} />
           </button>
         </div>
         <div className="capture-grid">
-          <button className="capture-option is-ready" type="button">
+          <button className="capture-option is-ready" type="button"
+            onClick={() => dialogRef.current?.querySelector<HTMLInputElement>('#recipe-title')?.focus()}>
             <BookOpen size={22} />
             <span>
               <strong>Blank recipe</strong>
@@ -393,7 +398,6 @@ function AddSheet({
               value={title}
               onChange={(event) => setTitle(event.target.value)}
               placeholder="e.g. Mom's kimchi jjigae"
-              autoFocus
             />
             <button
               className="button button-primary"
@@ -412,7 +416,7 @@ function AddSheet({
   );
 }
 
-function CollectionPicker({
+export function CollectionPicker({
   recipeId,
   book,
   onChange,
@@ -423,9 +427,15 @@ function CollectionPicker({
   onChange: (book: RecipeEditableCollectionBook) => Promise<void>;
   onClose: () => void;
 }) {
+  const [saving,setSaving]=useState(false);
+  const [error,setError]=useState('');
+  const gate=useRef(createExclusiveActionGate());
+  const dismiss=()=>{if(!gate.current.busy)onClose();};
+  const dialogRef=useAccessibleDialog<HTMLElement>(true,dismiss,{busy:saving,initialFocus:'button[aria-label="Close"]'});
   return (
-    <div className="modal-layer" role="presentation" onMouseDown={onClose}>
+    <div className="modal-layer" role="presentation" onMouseDown={dismiss}>
       <section
+        ref={dialogRef} tabIndex={-1}
         className="sheet compact-sheet"
         role="dialog"
         aria-modal="true"
@@ -437,10 +447,12 @@ function CollectionPicker({
             <p className="eyebrow">Organize</p>
             <h2 id="collection-picker-title">Save to collection</h2>
           </div>
-          <button className="icon-button" onClick={onClose} aria-label="Close">
+          <button className="icon-button" type="button" onClick={dismiss} aria-label="Close" disabled={saving}>
             <X size={21} />
           </button>
         </div>
+        {error && <p role="alert" className="studio-alert">{error}</p>}
+        {saving && <p role="status" className="muted">Saving collection assignment…</p>}
         {book.collections.length === 0 ? (
           <p className="muted">
             Create a collection first, then you can organize this recipe.
@@ -458,15 +470,20 @@ function CollectionPicker({
                   <input
                     type="checkbox"
                     checked={checked}
+                    disabled={saving}
                     onChange={async (event) => {
-                      await onChange(
-                        setRecipeInCollection(
-                          book,
-                          collection.id,
-                          recipeId,
-                          event.target.checked,
-                        ),
-                      );
+                      if (gate.current.busy) return;
+                      const selected = event.target.checked;
+                      setSaving(true);setError('');
+                      try {
+                        await gate.current.run(async()=> {
+                          await onChange(setRecipeInCollection(book,collection.id,recipeId,selected));
+                        });
+                      } catch {
+                        setError('Could not save collection assignment. No change was confirmed.');
+                      } finally {
+                        setSaving(false);
+                      }
                     }}
                   />
                 </label>

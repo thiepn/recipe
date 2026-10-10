@@ -1,5 +1,6 @@
 import { useEffect, useState, type ChangeEvent } from 'react';
 import { FileImage, FileText, Globe, LoaderCircle, Sparkles, X } from 'lucide-react';
+import { useAccessibleDialog } from './useAccessibleDialog.ts';
 import type { LunaDraft } from '../ai/contracts.ts';
 import {
   extractSchemaRecipe,
@@ -38,6 +39,7 @@ export function ImportSheet({ open, initialMode, onClose, onSave, onLunaExtract 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [duplicate, setDuplicate] = useState(false);
+  const dialogRef=useAccessibleDialog<HTMLElement>(open,onClose,{busy,initialFocus:'button[aria-label="Close importer"]'});
 
   useEffect(() => {
     if (!open) {
@@ -203,6 +205,7 @@ export function ImportSheet({ open, initialMode, onClose, onSave, onLunaExtract 
     <div className="modal-layer" role="presentation" onMouseDown={() => { if (!busy) onClose(); }}>
       <section
         className="sheet import-sheet"
+        ref={dialogRef} tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="import-title"
