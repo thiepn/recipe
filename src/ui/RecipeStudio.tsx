@@ -100,13 +100,20 @@ export function RecipeStudio({record,onClose,onSave}:Props) {
         <h1 id="studio-title">Make this recipe yours.</h1>
         <p>Adjust the original or imported recipe. Changes are saved privately and synced to your cookbook.</p>
       </header>
+      <nav className="studio-outline" aria-label="Jump to editor section">
+        <a href="#studio-section-recipe">Recipe</a>
+        <a href="#studio-section-ingredients">Ingredients <span>{items.length}</span></a>
+        <a href="#studio-section-method">Method <span>{steps.length}</span></a>
+        <a href="#studio-section-organize">Organize</a>
+        <a href="#studio-section-notes">Notes</a>
+      </nav>
       {conflict && <p className="studio-alert" role="alert">
         This recipe has a sync conflict. Resolve the conflict before editing to avoid overwriting another version.
       </p>}
       {error && <p className="studio-alert" role="alert">{error}</p>}
       <div className="studio-layout">
         <div className="studio-main-fields">
-          <section className="studio-panel">
+          <section className="studio-panel" id="studio-section-recipe" tabIndex={-1}>
             <div className="studio-section-title"><span>01</span><div><h2>The recipe</h2><p>The details readers see first.</p></div></div>
             <label className="studio-field">Name
               <input autoFocus maxLength={240} value={document.version.title}
@@ -141,7 +148,7 @@ export function RecipeStudio({record,onClose,onSave}:Props) {
             </div>
           </section>
 
-          <section className="studio-panel">
+          <section className="studio-panel" id="studio-section-ingredients" tabIndex={-1}>
             <div className="studio-section-title"><span>02</span><div><h2>Ingredients</h2><p>Use separate quantity, unit and name fields for accurate editing.</p></div></div>
             <div className="studio-row-list">
               {items.map((row,index)=>{
@@ -191,7 +198,7 @@ export function RecipeStudio({record,onClose,onSave}:Props) {
             </button>
           </section>
 
-          <section className="studio-panel">
+          <section className="studio-panel" id="studio-section-method" tabIndex={-1}>
             <div className="studio-section-title"><span>03</span><div><h2>Method</h2><p>Arrange instructions in the order you actually cook.</p></div></div>
             <div className="studio-row-list">
               {steps.map((row,index)=><div className="studio-step-row" key={row.id}>
@@ -231,7 +238,7 @@ export function RecipeStudio({record,onClose,onSave}:Props) {
         </div>
 
         <aside className="studio-side-fields">
-          <section className="studio-panel">
+          <section className="studio-panel" id="studio-section-organize" tabIndex={-1}>
             <div className="studio-section-title"><span>04</span><div><h2>Find & organize</h2><p>Make recipes easier to discover.</p></div></div>
             <label className="studio-field">Cuisine tags
               <input value={tags.cuisineTags} maxLength={900} placeholder="Korean, home cooking"
@@ -247,7 +254,7 @@ export function RecipeStudio({record,onClose,onSave}:Props) {
             </label>
             <small>Separate tags with commas. They help search your cookbook.</small>
           </section>
-          <section className="studio-panel">
+          <section className="studio-panel" id="studio-section-notes" tabIndex={-1}>
             <div className="studio-section-title"><span>05</span><div><h2>Kitchen notes</h2><p>Remember the details that matter.</p></div></div>
             <label className="studio-field">Personal notes
               <textarea rows={7} maxLength={20_000} value={document.version.authorNote??''}

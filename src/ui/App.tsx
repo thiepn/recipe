@@ -49,6 +49,7 @@ import { createBlankRecipe } from '../library/create.ts';
 import { createImportedRecipe, importDuplicateCandidates, type ImportDraft, type ImportKind } from '../import/recipe-import.ts';
 import { ImportSheet } from './ImportSheet.tsx';
 import { RecipeStudio } from './RecipeStudio.tsx';
+import { CookbookViewSwitch, type CookbookViewMode } from './CookbookViewSwitch.tsx';
 import { RecoveryPanel } from './RecoveryPanel.tsx';
 import { CookWorkspace } from './CookWorkspace.tsx';
 import { RecipeWorkspaceSync, type WorkspaceConflict } from '../workspace/sync.ts';
@@ -190,7 +191,7 @@ function EmptyCookbook({ onAdd }: { onAdd: () => void }) {
   );
 }
 
-function RecipeCard({
+export function RecipeCard({
   record,
   onOpen,
   onFavorite,
@@ -474,7 +475,7 @@ function CollectionPicker({
   );
 }
 
-function RecipeDetail({
+export function RecipeDetail({
   record,
   collections,
   onClose,
@@ -495,18 +496,60 @@ function RecipeDetail({
 }) {
   const recipe = recipeCardFromLocal(record);
   const doc = record.working;
+  const dialogRef = useRef<HTMLElement>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const dialog = dialogRef.current;
+    dialog?.querySelector<HTMLButtonElement>('.detail-close')?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!dialog || !dialog.contains(document.activeElement)) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeRef.current();
+      }
+      if (event.key !== 'Tab') return;
+      const items = [...dialog.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )].filter(item => item.getClientRects().length > 0);
+      if (!items.length) return;
+      const first = items[0]!;
+      const last = items[items.length - 1]!;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault(); last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault(); first.focus();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      if (previous?.isConnected) previous.focus();
+    };
+  }, [record.resourceId]);
+  const jumpTo = (target: 'recipe-detail-ingredients' | 'recipe-detail-method') => {
+    const destination = dialogRef.current?.querySelector<HTMLElement>('#' + target);
+    if (!destination) return;
+    destination.scrollIntoView({
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+      block: 'start',
+    });
+    destination.focus({ preventScroll: true });
+  };
 
   return (
     <div className="detail-layer" role="presentation" onMouseDown={onClose}>
       <article
         className="recipe-detail"
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="recipe-detail-title"
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="detail-hero" style={recipeStyle(recipe.title)}>
-          <button className="icon-button detail-close" onClick={onClose}>
+          <button className="icon-button detail-close" type="button" aria-label="Close recipe details" onClick={onClose}>
             <X size={21} />
           </button>
           <div className="detail-hero-mark">
@@ -572,9 +615,13 @@ function RecipeDetail({
             </button>}
           </div>
 
-          <section className="detail-section">
+          <nav className="detail-jump" aria-label="Recipe sections">
+            <button type="button" onClick={() => jumpTo('recipe-detail-ingredients')}>Ingredients <span>{doc.ingredients.length}</span></button>
+            <button type="button" onClick={() => jumpTo('recipe-detail-method')}>Method <span>{doc.steps.length}</span></button>
+          </nav>
+          <section className="detail-section" id="recipe-detail-ingredients" tabIndex={-1} aria-labelledby="detail-ingredients-title">
             <div className="section-heading">
-              <h2>Ingredients</h2>
+              <h2 id="detail-ingredients-title">Ingredients</h2>
               <span>{doc.ingredients.length}</span>
             </div>
             {doc.ingredients.length === 0 ? (
@@ -602,9 +649,9 @@ function RecipeDetail({
             )}
           </section>
 
-          <section className="detail-section">
+          <section className="detail-section" id="recipe-detail-method" tabIndex={-1} aria-labelledby="detail-method-title">
             <div className="section-heading">
-              <h2>Method</h2>
+              <h2 id="detail-method-title">Method</h2>
               <span>{doc.steps.length}</span>
             </div>
             {doc.steps.length === 0 ? (
@@ -713,6 +760,7 @@ export default function App() {
   const [pantryText, setPantryText] = useState('');
   const [missingLimit, setMissingLimit] = useState<MissingLimit>('any');
   const pantryWrites = useRef<Promise<void>>(Promise.resolve());
+  const [viewMode, setViewMode] = useState<CookbookViewMode>('grid');
   const [filters, setFilters] = useState<RecipeLibraryFilters>({
     query: '',
     favoritesOnly: false,
@@ -1478,14 +1526,17 @@ export default function App() {
               ) : (
                 <>
                   <div className="results-row">
-                    <span>{rankedRecipes.length} {rankedRecipes.length === 1 ? 'recipe' : 'recipes'}</span>
-                    {hasActiveFilters && (
-                      <button className="text-button" type="button" onClick={resetFilters}>
-                        Clear filters <X size={14} />
-                      </button>
-                    )}
+                    <span role="status" aria-live="polite">{rankedRecipes.length} {rankedRecipes.length === 1 ? 'recipe' : 'recipes'} found</span>
+                    <div className="cookbook-result-actions">
+                      {hasActiveFilters && (
+                        <button className="text-button" type="button" onClick={resetFilters}>
+                          Clear filters <X size={14} />
+                        </button>
+                      )}
+                      <CookbookViewSwitch value={viewMode} onChange={setViewMode} />
+                    </div>
                   </div>
-                  <div className="recipe-grid">
+                  <div className={viewMode === 'list' ? 'recipe-grid is-list' : 'recipe-grid'} data-view={viewMode}>
                     {rankedRecipes.map(({ card, coverage }) => {
                       const record = library.recipes.find((recipe) => recipe.resourceId === card.id);
                       if (!record) return null;

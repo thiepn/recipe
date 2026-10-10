@@ -102,6 +102,7 @@ function CookSession({record,onExit,store}: {
   const [storageError,setStorageError]=useState('');
   const [loading,setLoading]=useState(true);
   const [manualMinutes,setManualMinutes]=useState(5);
+  const [focusMode,setFocusMode]=useState(false);
   const [now,setNow]=useState(()=>Date.now());
   useEffect(()=>{
     let cancelled=false;
@@ -208,7 +209,7 @@ function CookSession({record,onExit,store}: {
     change(()=>createKitchenSession(doc));
     setManualMinutes(5);
   };
-  return <section className="kitchen-session" aria-labelledby="cooking-title">
+  return <section className={focusMode?'kitchen-session is-focus':'kitchen-session'} aria-labelledby="cooking-title">
     <header className="kitchen-session-header">
       <button className="kitchen-return" type="button" onClick={leave}>
         <ArrowLeft size={18}/> Save & leave
@@ -218,14 +219,20 @@ function CookSession({record,onExit,store}: {
         <h1 id="cooking-title">{doc.version.title}</h1>
         <span>{doc.version.totalMinutes?`${doc.version.totalMinutes} min estimated`:'Follow the steps at your pace'}</span>
       </div>
-      <div className="kitchen-progress-label">{progress}% done</div>
+      <div className="kitchen-session-utilities">
+        <button type="button" className="kitchen-focus-toggle" aria-pressed={focusMode}
+          aria-controls="kitchen-ingredients-panel" onClick={()=>setFocusMode(mode=>!mode)}>
+          {focusMode?'Show ingredients':'Focus on steps'}
+        </button>
+        <div className="kitchen-progress-label">{progress}% done</div>
+      </div>
       {storageError&&<p className="kitchen-storage-error" role="alert">{storageError}</p>}
     </header>
     <div className="kitchen-progress" role="progressbar" aria-label="Completed cooking steps" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
       <div style={{width:`${progress}%`}}/>
     </div>
     <div className="kitchen-layout">
-      <aside className="kitchen-supply">
+      <aside className="kitchen-supply" id="kitchen-ingredients-panel" hidden={focusMode}>
         <div className="kitchen-supply-header">
           <h2>Ingredients</h2>
           <span>{checkedIngredients.size}/{ingredients.length}</span>

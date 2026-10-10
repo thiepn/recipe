@@ -89,6 +89,7 @@ export function MealPlanner({records,db,accountId,pantry,onCook,onEdit,onAdd}:Pr
     manual.filter(item=>!item.checked).length;
   const plannedDays=weekDays(week);
   const today=localToday();
+  const populatedSlots=weekEntries.length;
 
   const chooseRecipe=(day:string,slot:MealSlot,recipeId:string)=>{
     const record=recipeById.get(recipeId);
@@ -130,7 +131,12 @@ export function MealPlanner({records,db,accountId,pantry,onCook,onEdit,onAdd}:Pr
         <h1 id="meal-plan-heading">Meal plan</h1>
         <p>Choose recipes for each day. The shopping list follows your menu.</p>
       </div>
-      <button type="button" className="planner-shop-jump" onClick={()=>shoppingRef.current?.scrollIntoView({behavior:'smooth',block:'start'})}>
+      <button type="button" className="planner-shop-jump" onClick={()=>{
+        const target=shoppingRef.current;
+        if(!target)return;
+        target.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});
+        target.focus({preventScroll:true});
+      }}>
         <ShoppingBasket size={18}/> Shopping list <span>{shoppingCount}</span>
       </button>
     </header>
@@ -148,6 +154,11 @@ export function MealPlanner({records,db,accountId,pantry,onCook,onEdit,onAdd}:Pr
         <button type="button" aria-label="Next week" onClick={()=>setWeek(w=>addDays(w,7))}><ArrowRight size={18}/></button>
       </div>
       <button type="button" className="planner-today" disabled={mondayOf(today)===week} onClick={()=>setWeek(mondayOf(today))}>Current week</button>
+    </div>
+    <div className="planner-week-summary" aria-live="polite">
+      <span><strong>{populatedSlots}</strong> of {plannedDays.length*MEAL_SLOTS.length} meal slots planned</span>
+      <span><strong>{shoppingCount}</strong> shopping items still unchecked</span>
+      <span className="planner-week-note">Personal plan · saved on this device</span>
     </div>
     <div className="planner-layout">
       <div className="planner-days" aria-label="Weekly meal assignments">
@@ -197,7 +208,7 @@ export function MealPlanner({records,db,accountId,pantry,onCook,onEdit,onAdd}:Pr
           </article>;
         })}
       </div>
-      <aside className="planner-shopping" ref={shoppingRef} aria-labelledby="planner-shopping-title">
+      <aside className="planner-shopping" ref={shoppingRef} tabIndex={-1} aria-labelledby="planner-shopping-title">
         <div className="planner-shopping-heading">
           <div className="planner-shopping-icon"><ShoppingBasket size={22}/></div>
           <div><p className="eyebrow">For this week</p><h2 id="planner-shopping-title">Shopping list</h2></div>
