@@ -57,6 +57,7 @@ import { RecipeWorkspaceSync, type WorkspaceConflict } from '../workspace/sync.t
 import { MealPlanner } from './MealPlanner.tsx';
 import { HouseholdSharing } from './HouseholdSharing.tsx';
 import { useAccessibleDialog } from './useAccessibleDialog.ts';
+import { createExclusiveActionGate } from './exclusive-action.ts';
 import { CookingIntelligence } from './CookingIntelligence.tsx';
 import { cleanCookingPreferences, DEFAULT_COOKING_PREFERENCES, type CookingPreferences } from '../intelligence/suggestions.ts';
 import { LunaSheet } from './LunaSheet.tsx';
@@ -429,7 +430,8 @@ export function CollectionPicker({
 }) {
   const [saving,setSaving]=useState(false);
   const [error,setError]=useState('');
-  const dismiss=()=>{if(!saving)onClose();};
+  const gate=useRef(createExclusiveActionGate());
+  const dismiss=()=>{if(!gate.current.busy)onClose();};
   const dialogRef=useAccessibleDialog<HTMLElement>(true,dismiss,{busy:saving,initialFocus:'button[aria-label="Close"]'});
   return (
     <div className="modal-layer" role="presentation" onMouseDown={dismiss}>
@@ -471,11 +473,13 @@ export function CollectionPicker({
                     checked={checked}
                     disabled={saving}
                     onChange={async (event) => {
-                      if (saving) return;
+                      if (gate.current.busy) return;
                       const selected = event.target.checked;
                       setSaving(true);setError('');
                       try {
-                        await onChange(setRecipeInCollection(book,collection.id,recipeId,selected));
+                        await gate.current.run(async()=> {
+                          await onChange(setRecipeInCollection(book,collection.id,recipeId,selected));
+                        });
                       } catch {
                         setError('Could not save collection assignment. No change was confirmed.');
                       } finally {
