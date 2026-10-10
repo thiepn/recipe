@@ -23,6 +23,7 @@ import {
   Sparkles,
   TimerReset,
   Utensils,
+  Users,
   WifiOff,
   X,
 } from 'lucide-react';
@@ -54,6 +55,7 @@ import { RecoveryPanel } from './RecoveryPanel.tsx';
 import { CookWorkspace } from './CookWorkspace.tsx';
 import { RecipeWorkspaceSync, type WorkspaceConflict } from '../workspace/sync.ts';
 import { MealPlanner } from './MealPlanner.tsx';
+import { HouseholdSharing } from './HouseholdSharing.tsx';
 import { LunaSheet } from './LunaSheet.tsx';
 import { uiLanguage } from '../ai/contracts.ts';
 import {
@@ -756,6 +758,7 @@ export default function App() {
   );
   const [resolvingWorkspace, setResolvingWorkspace] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
+  const [householdOpen, setHouseholdOpen] = useState(false);
   const [pantry, setPantry] = useState<PantryDocument>(EMPTY_PANTRY);
   const [pantryText, setPantryText] = useState('');
   const [missingLimit, setMissingLimit] = useState<MissingLimit>('any');
@@ -1332,6 +1335,9 @@ export default function App() {
                     {activeRecipes.length} {activeRecipes.length === 1 ? 'recipe' : 'recipes'}
                   </span>
                 </div>
+                <button className="household-open" type="button" onClick={() => setHouseholdOpen(true)}>
+                  <Users size={17} aria-hidden="true"/> Family sharing
+                </button>
                 <button type="button" className="button button-primary desktop-action" onClick={() => setAddOpen(true)}>
                   <Plus size={18} /> Add recipe
                 </button>
@@ -1559,6 +1565,8 @@ export default function App() {
               )}
             </section>
           )}
+
+          {householdOpen && <HouseholdSharing onClose={() => setHouseholdOpen(false)} />}
 
           {section === 'collections' && (
             <>

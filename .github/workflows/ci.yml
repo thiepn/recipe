@@ -45,3 +45,12 @@ jobs:
           path: test-results/p17-*.png
           if-no-files-found: warn
           retention-days: 7
+
+      - name: Preserve P18 synthetic access-denial review images
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: recipe-p18-denied-sharing-visual-review
+          path: test-results/p18-*.png
+          if-no-files-found: warn
+          retention-days: 7

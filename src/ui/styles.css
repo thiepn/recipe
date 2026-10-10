@@ -3568,3 +3568,44 @@ body {
  .cookbook-page .recipe-card,.detail-jump *,.studio-outline *{animation:none!important;transition:none!important;}
  .detail-section,.studio-panel[id]{scroll-behavior:auto!important;}
 }
+
+
+/* P18 — gated household review, integrated into the actual cookbook. */
+.household-open{display:inline-flex;gap:8px;align-items:center;justify-content:center;background:#fffaf4;border:1px solid #c9b9a8;border-radius:8px;color:#684b37;padding:10px 13px;font-size:.78rem;font-weight:800;min-height:43px;}
+.household-open:focus-visible{outline:3px solid #af764a;outline-offset:2px;}
+.household-overlay{position:fixed;inset:0;background:rgb(29 24 19 / 50%);z-index:300;display:flex;justify-content:flex-end;}
+.household-sheet{background:#fffdf8;width:min(610px,100%);height:100%;overflow:auto;overscroll-behavior:contain;padding:clamp(17px,3vw,36px);border-left:1px solid #bba58a;box-shadow:-15px 0 65px rgb(35 26 18 / 19%);}
+.household-header{display:flex;align-items:start;justify-content:space-between;gap:15px;border-bottom:1px solid #e3d5c6;padding-bottom:21px;margin-bottom:20px;}
+.household-header h2{font:600 clamp(1.8rem,4vw,2.7rem)/1.14 Georgia,serif;margin:0;}
+.household-header .eyebrow{color:#8b694e;font-size:.73rem;margin:0 0 7px;}
+.household-close{display:grid;place-items:center;min-width:44px;min-height:44px;border:1px solid #dac9b9;background:#f8efe5;border-radius:6px;}
+.household-denial{display:flex;align-items:start;gap:12px;padding:15px 17px;margin:0 0 24px;border:1px solid #d2b99d;background:#f9f0e4;color:#684424;line-height:1.55;font-size:.83rem;font-weight:650;}
+.household-denial svg{flex:none;margin-top:2px;}
+.household-permissions{border-bottom:1px solid #eadbcd;padding-bottom:22px;margin-bottom:22px;}
+.household-sheet h3{font:600 1.25rem/1.25 Georgia,serif;margin:0 0 9px;}
+.household-permissions>p,.household-form>p,.household-revoke p,.household-preview p{line-height:1.6;color:#746657;font-size:.83rem;}
+.household-permissions dl{display:grid;gap:8px;margin:16px 0 0;}
+.household-permissions dl>div{display:grid;grid-template-columns:65px minmax(0,1fr);gap:14px;padding:11px 0;border-top:1px solid #ece0d3;font-size:.79rem;}
+.household-permissions dt{font-weight:800;color:#5d4331;}
+.household-permissions dd{margin:0;color:#78695b;line-height:1.5;}
+.household-form{display:grid;gap:11px;border-bottom:1px solid #eadbcd;padding:0 0 24px;margin-bottom:20px;}
+.household-form>p{margin:0 0 5px;}
+.household-form label{display:grid;gap:6px;font-size:.77rem;font-weight:800;color:#685441;}
+.household-form input,.household-form select{min-height:46px;width:100%;border:1px solid #c6b6a5;border-radius:6px;background:white;color:#312820;padding:10px 12px;font-size:.9rem;min-width:0;}
+.household-form button{justify-self:start;margin-top:6px;min-height:45px;}
+.household-form-error{margin:0;padding:10px;border:1px solid #bd7658;color:#913a25;background:#fff1e8;font-size:.81rem;}
+.household-preview{background:#eef4eb;border:1px solid #b0c2a2;padding:16px;margin-bottom:22px;}
+.household-preview strong{color:#37603f;}
+.household-preview p{margin:5px 0;overflow-wrap:anywhere;}
+.household-preview span{font-weight:800;color:#4c694f;margin-right:12px;}
+.household-preview button,.household-revoke button{min-height:42px;padding:8px 12px;border:1px solid #dacbbf;background:#eee9e3;border-radius:6px;font-size:.79rem;color:#72675c;}
+.household-preview button:disabled,.household-revoke button:disabled{cursor:not-allowed;opacity:.8;}
+.household-revoke{padding:2px 0 22px;}
+.household-revoke h3{display:flex;align-items:center;gap:9px;}
+.household-footer{border-top:1px solid #e3d5c6;padding:18px 0;display:flex;gap:12px;align-items:start;flex-wrap:wrap;font-size:.73rem;line-height:1.5;color:#716557;}
+.household-footer svg{flex:none;}
+.household-footer>span{flex:1;min-width:180px;}
+.household-footer button{background:transparent;border:0;color:#774e32;display:flex;align-items:center;gap:6px;text-decoration:underline;font-weight:800;min-height:38px;}
+.household-sheet button:focus-visible,.household-sheet input:focus-visible,.household-sheet select:focus-visible{outline:3px solid #a8673f;outline-offset:2px;}
+@media(max-width:590px){.cookbook-toolbar{flex-wrap:wrap;}.household-sheet{border:0;box-shadow:none;}.household-form button{justify-self:stretch;}.household-open{min-height:42px;}.household-permissions dl>div{grid-template-columns:55px minmax(0,1fr);}}
+@media(prefers-reduced-motion:reduce){.household-sheet *{animation:none!important;transition:none!important;scroll-behavior:auto!important;}}
