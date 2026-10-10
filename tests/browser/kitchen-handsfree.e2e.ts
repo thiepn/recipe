@@ -1,7 +1,11 @@
 import { expect, test } from '@playwright/test';
 
 const fixture='/tests/browser/kitchen-handsfree.html';
-test('actual Kitchen controls are accessible, bounded and responsive', async ({page})=>{
+test('actual Kitchen controls are accessible, bounded and responsive without speech APIs', async ({page})=>{
+  await page.addInitScript(()=>{
+    Object.defineProperty(window,'SpeechRecognition',{configurable:true,value:undefined});
+    Object.defineProperty(window,'webkitSpeechRecognition',{configurable:true,value:undefined});
+  });
   await page.goto(fixture);
   await expect(page.getByRole('heading',{name:'Hands-free cooking'})).toBeVisible();
   await expect(page.getByRole('button',{name:'Previous step'})).toBeDisabled();
