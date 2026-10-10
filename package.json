@@ -9,7 +9,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --exclude tests/site-smoke.test.mjs",
     "verify": "pnpm typecheck && pnpm test && node --test tests/site-smoke.test.mjs && pnpm build && pnpm smoke:local",
     "smoke:site": "node scripts/check-site.mjs",
     "smoke:local": "node scripts/check-local.mjs",
