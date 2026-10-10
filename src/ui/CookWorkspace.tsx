@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import type { LocalRecipeRecord, RecipeLocalDb } from '../data/local-db.ts';
 import { boundedServings, digitalTimer, kitchenIngredientText, stepProgress } from '../kitchen/model.ts';
+import { KitchenHandsFree } from './KitchenHandsFree.tsx';
 import {
   KitchenSessionStore, kitchenSessionStoreFor, createKitchenSession, dismissKitchenTimer, pauseKitchenTimer,
   remainingTimerSeconds, restoreKitchenSession, resumeKitchenTimer,
@@ -264,6 +265,11 @@ function CookSession({record,onExit,store}: {
           </div>}
       </aside>
       <div className="kitchen-instructions">
+        <KitchenHandsFree recipeId={record.resourceId} stepIndex={stepIndex}
+          stepCount={steps.length} stepTitle={step?.title??null}
+          stepInstruction={step?.instruction??''} timers={timers} now={now}
+          onNext={()=>chooseStep(Math.min(stepIndex+1,steps.length-1))}
+          onPrevious={()=>chooseStep(Math.max(0,stepIndex-1))}/>
         {complete?
           <div className="kitchen-finished">
             <CheckCircle2 size={65} strokeWidth={1.25}/>
