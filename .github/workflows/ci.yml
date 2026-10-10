@@ -54,3 +54,12 @@ jobs:
           path: test-results/p18-*.png
           if-no-files-found: warn
           retention-days: 7
+
+      - name: Preserve P19 synthetic cooking suggestion captures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: recipe-p19-local-intelligence-visual-review
+          path: test-results/p19-*.png
+          if-no-files-found: warn
+          retention-days: 7

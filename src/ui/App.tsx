@@ -56,6 +56,8 @@ import { CookWorkspace } from './CookWorkspace.tsx';
 import { RecipeWorkspaceSync, type WorkspaceConflict } from '../workspace/sync.ts';
 import { MealPlanner } from './MealPlanner.tsx';
 import { HouseholdSharing } from './HouseholdSharing.tsx';
+import { CookingIntelligence } from './CookingIntelligence.tsx';
+import { cleanCookingPreferences, DEFAULT_COOKING_PREFERENCES, type CookingPreferences } from '../intelligence/suggestions.ts';
 import { LunaSheet } from './LunaSheet.tsx';
 import { uiLanguage } from '../ai/contracts.ts';
 import {
@@ -763,6 +765,8 @@ export default function App() {
   const [pantryText, setPantryText] = useState('');
   const [missingLimit, setMissingLimit] = useState<MissingLimit>('any');
   const pantryWrites = useRef<Promise<void>>(Promise.resolve());
+  const intelligenceWrites = useRef<Promise<void>>(Promise.resolve());
+  const [cookingPreferences,setCookingPreferences] = useState<CookingPreferences>(DEFAULT_COOKING_PREFERENCES);
   const [viewMode, setViewMode] = useState<CookbookViewMode>('grid');
   const [filters, setFilters] = useState<RecipeLibraryFilters>({
     query: '',
@@ -801,6 +805,16 @@ export default function App() {
       .catch(() => undefined)
       .then(() => db.setMeta(accountId, 'pantry-v1', next));
     void pantryWrites.current.catch(() => setToast('Could not save your ingredient list on this device.'));
+  };
+
+  const saveCookingPreferences = (next: CookingPreferences) => {
+    if (!runtime) return;
+    const checked=cleanCookingPreferences(next);
+    setCookingPreferences(checked);
+    const { accountId,db }=runtime;
+    intelligenceWrites.current=intelligenceWrites.current.catch(()=>undefined)
+      .then(()=>db.setMeta(accountId,'cooking-preferences-v1',checked));
+    void intelligenceWrites.current.catch(()=>setToast('Could not save cooking preferences on this device.'));
   };
 
   const addPantryText = (raw: string) => {
@@ -957,9 +971,15 @@ export default function App() {
 
         await reload(nextRuntime);
         await refreshSyncHealth(nextRuntime);
-        const savedPantry = cleanPantry(await db.getMeta<unknown>(identity.userId, 'pantry-v1'));
+        const [pantryValue,preferencesValue] = await Promise.all([
+          db.getMeta<unknown>(identity.userId,'pantry-v1'),
+          db.getMeta<unknown>(identity.userId,'cooking-preferences-v1'),
+        ]);
+        const savedPantry=cleanPantry(pantryValue);
+        const savedPreferences=cleanCookingPreferences(preferencesValue);
         if (!cancelled) {
           setPantry(savedPantry);
+          setCookingPreferences(savedPreferences);
           if (savedPantry.ingredients.length > 0) {
             setFilters((current) => ({ ...current, sort: 'match' }));
           }
@@ -1257,7 +1277,7 @@ export default function App() {
               if (!runtime) return;
               try {
                 // Pantry updates are queued separately from the workspace stores.
-                await pantryWrites.current;
+                await Promise.all([pantryWrites.current,intelligenceWrites.current]);
                 await signOutRecipe(runtime.authClient, runtime.db, runtime.accountId);
                 globalThis.location.assign('/');
               } catch (error) {
@@ -1455,6 +1475,11 @@ export default function App() {
                   </div>
                 )}
               </section>
+
+              {runtime&&<CookingIntelligence key={runtime.accountId} accountId={runtime.accountId}
+                records={activeRecipes} pantry={pantry} preferences={cookingPreferences}
+                onChange={saveCookingPreferences}
+                onOpen={record=>setSelectedRecipeId(record.resourceId)} onPlan={()=>navigate('plan')}/>}
 
               <div className="library-toolbar cookbook-filters" role="group" aria-label="Filter recipes">
                 <button className={hasActiveFilters ? 'filter-chip' : 'filter-chip is-selected'} type="button" aria-pressed={!hasActiveFilters} onClick={resetFilters}>
@@ -1914,7 +1939,7 @@ export default function App() {
                 disabled={discardingLocalData} onClick={async () => {
                   setDiscardingLocalData(true);
                   try {
-                    await pantryWrites.current;
+                    await Promise.all([pantryWrites.current,intelligenceWrites.current]);
                     await signOutRecipe(runtime.authClient, runtime.db, runtime.accountId,
                       { discardLocalWorkspace: true });
                     globalThis.location.assign('/');

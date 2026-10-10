@@ -3609,3 +3609,48 @@ body {
 .household-sheet button:focus-visible,.household-sheet input:focus-visible,.household-sheet select:focus-visible{outline:3px solid #a8673f;outline-offset:2px;}
 @media(max-width:590px){.cookbook-toolbar{flex-wrap:wrap;}.household-sheet{border:0;box-shadow:none;}.household-form button{justify-self:stretch;}.household-open{min-height:42px;}.household-permissions dl>div{grid-template-columns:55px minmax(0,1fr);}}
 @media(prefers-reduced-motion:reduce){.household-sheet *{animation:none!important;transition:none!important;scroll-behavior:auto!important;}}
+
+
+/* P19 — private editorial suggestions, never an AI-chat dashboard */
+.cooking-intelligence{background:#fffcf6;border:1px solid #dcc9b2;border-top:3px solid #a8734c;margin:25px 0;padding:clamp(16px,2.7vw,26px);min-width:0;}
+.cooking-ideas-heading{display:flex;align-items:start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:14px;}
+.cooking-ideas-heading .eyebrow{display:flex;align-items:center;gap:7px;color:#956744;font-size:.7rem;margin:0 0 6px;}
+.cooking-ideas-heading h2{font:600 clamp(1.5rem,3vw,2.12rem)/1.18 Georgia,serif;margin:0 0 7px;}
+.cooking-ideas-heading p:last-child{color:#716458;line-height:1.5;font-size:.82rem;margin:0;}
+.cooking-ideas-toggle{display:flex;align-items:center;gap:9px;min-height:44px;padding:10px 14px;border:1px solid #d1b899;background:#f3e8d9;border-radius:6px;font-size:.79rem;font-weight:750;cursor:pointer;}
+.cooking-ideas-toggle input,.cooking-ideas-favorites input{width:18px;height:18px;accent-color:#8c5937;}
+.cooking-ideas-locked{display:flex;gap:10px;align-items:center;border-top:1px solid #e7d9c9;padding-top:16px;color:#766657;font-size:.82rem;}
+.cooking-ideas-locked p{margin:0;}
+.cooking-ideas-settings{display:grid;grid-template-columns:minmax(175px,1fr) minmax(145px,1fr) minmax(220px,1.3fr);align-items:end;gap:12px;padding:15px 0;border-block:1px solid #e8dac9;}
+.cooking-ideas-settings label{display:grid;gap:7px;font-size:.74rem;color:#68513d;font-weight:800;}
+.cooking-ideas-settings select,.cooking-ideas-settings input[type=text],.cooking-ideas-hidden-form input{width:100%;min-width:0;min-height:42px;padding:8px 10px;background:#fff;border:1px solid #c7b29e;border-radius:5px;color:#36271c;font-size:.8rem;}
+.cooking-ideas-settings label.cooking-ideas-favorites{display:flex;align-items:center;gap:9px;min-height:42px;cursor:pointer;}
+.cooking-ideas-hidden-form{display:grid;gap:7px;min-width:0;}
+.cooking-ideas-hidden-form label{display:flex;align-items:center;gap:7px;}
+.cooking-ideas-hidden-form>div{display:flex;gap:6px;}
+.cooking-ideas-hidden-form button{background:#f4e3d1;border:1px solid #c4a182;color:#69432c;border-radius:5px;padding:8px 12px;font-size:.78rem;font-weight:800;}
+.cooking-ideas-hidden-form button:disabled{opacity:.5;cursor:default;}
+.cooking-ideas-hidden{display:flex;gap:6px;flex-wrap:wrap;padding-top:12px;}
+.cooking-ideas-hidden button{display:inline-flex;gap:6px;align-items:center;padding:8px 9px;min-height:36px;background:#fbf1e6;color:#634a34;border:1px solid #cbbb9f;border-radius:5px;font-size:.74rem;}
+.cooking-ideas-disclaimer{color:#776858;font-size:.73rem;line-height:1.55;margin:13px 0 17px;}
+.cooking-ideas-error{color:#952f21;background:#fff0e4;border:1px solid #d09d7a;padding:10px;font-size:.8rem;}
+.cooking-ideas-empty{background:#f4eee3;padding:17px;font-size:.84rem;color:#5e5141;}
+.cooking-ideas-empty button{min-height:42px;border:1px solid #ceb89f;background:#fffaf2;border-radius:5px;padding:9px 12px;font-weight:750;}
+.cooking-ideas-list{border-top:1px solid #decab7;}
+.cooking-idea{display:grid;grid-template-columns:32px minmax(0,1fr) auto;align-items:start;gap:13px;border-bottom:1px solid #e7dacb;padding:18px 0;min-width:0;}
+.cooking-idea-number{font:600 1.3rem/1.3 Georgia,serif;color:#a9764e;}
+.cooking-idea-main{min-width:0;}
+.cooking-idea h3{font:600 clamp(1.08rem,2vw,1.28rem)/1.25 Georgia,serif;margin:0 0 8px;overflow-wrap:anywhere;}
+.cooking-idea ul{padding:0;margin:0;list-style:none;display:flex;flex-wrap:wrap;gap:5px 16px;}
+.cooking-idea li{font-size:.74rem;line-height:1.5;color:#625b50;}
+.cooking-idea li:before{content:'· ';font-weight:800;color:#b97b4f;}
+.cooking-idea-missing{color:#97502e;font-size:.74rem;line-height:1.5;margin:7px 0 0;overflow-wrap:anywhere;}
+.cooking-idea-option{display:flex;gap:9px;align-items:start;font-size:.74rem;line-height:1.55;background:#f5eedf;border:1px solid #e5d7bb;padding:9px;margin:8px 0 0;}
+.cooking-idea-option svg{flex:none;margin-top:2px;}
+.cooking-idea>button,.cooking-ideas-plan button{display:inline-flex;align-items:center;gap:7px;justify-content:center;background:#fff7ec;border:1px solid #bfa084;color:#714a31;border-radius:6px;min-height:42px;padding:9px 12px;font-size:.77rem;font-weight:800;}
+.cooking-ideas-plan{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding-top:16px;}
+.cooking-ideas-plan p{font-size:.78rem;color:#71665b;line-height:1.5;margin:0;max-width:550px;}
+.cooking-intelligence button:focus-visible,.cooking-intelligence input:focus-visible,.cooking-intelligence select:focus-visible{outline:3px solid #ad6c3a;outline-offset:2px;}
+@media(max-width:810px){.cooking-ideas-settings{grid-template-columns:repeat(2,minmax(0,1fr));}.cooking-ideas-hidden-form{grid-column:1/-1;}}
+@media(max-width:590px){.cooking-ideas-settings{grid-template-columns:minmax(0,1fr);}.cooking-ideas-hidden-form{grid-column:auto;}.cooking-idea{grid-template-columns:25px minmax(0,1fr);gap:10px;}.cooking-idea>button{grid-column:2;justify-self:start;}.cooking-ideas-toggle{width:100%;justify-content:space-between;}.cooking-ideas-plan button{width:100%;}}
+@media(prefers-reduced-motion:reduce){.cooking-intelligence *{transition:none!important;animation:none!important;scroll-behavior:auto!important;}}
