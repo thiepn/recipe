@@ -47,7 +47,7 @@ test('reduced-motion + 200% CSS zoom with keyboard controls reflows',async({page
  await expect(page.getByRole('button',{name:'Review Tomato pasta'})).toBeVisible();
  const dims=await page.evaluate(()=>[document.documentElement.scrollWidth,document.documentElement.clientWidth]);
  expect(dims[0]!).toBeLessThanOrEqual(dims[1]!+1);
- const duration=await page.locator('.cooking-idea').evaluate(el=>getComputedStyle(el).transitionDuration);
+ const duration=await page.locator('.cooking-idea').first().evaluate(el=>getComputedStyle(el).transitionDuration);
  expect(duration.split(',').map(x=>x.trim())).toEqual(['0s']);
  await page.screenshot({path:'test-results/p19-'+testInfo.project.name+'-zoom200.png',fullPage:true});
 });
