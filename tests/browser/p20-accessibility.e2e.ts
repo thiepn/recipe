@@ -28,7 +28,7 @@ test('collection async contention rejects double save, failure surfaced and clos
  await nav.getByRole('button',{name:'collections'}).click();
  const dialog=page.getByRole('dialog',{name:'Save to collection'});
  const checkbox=dialog.getByRole('checkbox');
- await checkbox.check();
+ await checkbox.click();
  await expect(checkbox).toBeDisabled();
  await expect(dialog.getByRole('button',{name:'Close'})).toBeDisabled();
  await page.keyboard.press('Escape');
@@ -36,7 +36,7 @@ test('collection async contention rejects double save, failure surfaced and clos
  await expect(dialog.getByRole('alert')).toContainText('Could not save collection assignment');
  await expect(checkbox).not.toBeChecked();
  await expect(page.getByTestId('save-attempts')).toHaveText('1');
- await checkbox.check();
+ await checkbox.click();
  await expect(checkbox).toBeChecked();
  await expect(page.getByTestId('save-attempts')).toHaveText('2');
  await page.keyboard.press('Escape');
