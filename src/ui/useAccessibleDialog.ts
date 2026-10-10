@@ -40,8 +40,9 @@ export function useAccessibleDialog<T extends HTMLElement>(
     if (!active) return;
     const dialog = elementRef.current;
     if (!dialog) return;
-    const prior = preOpenFocus.current ??
-      (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const prior = focused && !dialog.contains(focused)
+      ? focused : preOpenFocus.current;
     if (options.focusOnMount !== false) {
       const preferred = options.initialFocus
         ? dialog.querySelector<HTMLElement>(options.initialFocus)
