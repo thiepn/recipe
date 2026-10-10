@@ -3459,3 +3459,27 @@ body {
   .recovery-import { flex-direction: column; align-items: stretch; }
   .recovery-file-label { align-self: flex-start; }
 }
+
+
+/* P16 — Functional, optional hands-free panel. No global microphone state. */
+.kitchen-handsfree{background:#fffbf4;border:1px solid #dfcdb7;border-left:4px solid #a76a41;border-radius:10px;padding:18px 20px;min-width:0;}
+.kitchen-handsfree-heading{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:14px;}
+.kitchen-handsfree-heading .eyebrow{font-size:.62rem;letter-spacing:.07em;margin:0 0 5px;color:#926443;}
+.kitchen-handsfree-heading h2{font-family:Georgia,serif;font-size:1.45rem;line-height:1.2;margin:0;}
+.kitchen-handsfree-heading>span{font-size:.72rem;color:#806e5f;white-space:nowrap;}
+.kitchen-handsfree-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
+.kitchen-handsfree-actions button,.kitchen-handsfree-settings button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:42px;padding:9px 12px;font-weight:700;font-size:.78rem;color:#624632;border:1px solid #d6bd9f;background:#fffefa;border-radius:7px;}
+.kitchen-handsfree-actions button[aria-pressed=true]{background:#f9e9de;border-color:#b97453;color:#8a3e25;}
+.kitchen-handsfree-actions button:disabled,.kitchen-handsfree-settings button:disabled{opacity:.48;cursor:not-allowed;}
+.kitchen-handsfree-actions button:focus-visible,.kitchen-handsfree-settings button:focus-visible,.kitchen-handsfree-settings input:focus-visible{outline:3px solid #ae6737;outline-offset:2px;}
+.kitchen-handsfree-unsupported{font-size:.74rem;color:#79695b;line-height:1.4;}
+.kitchen-handsfree-settings{border-top:1px solid #eaddce;margin-top:14px;padding-top:12px;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;}
+.kitchen-handsfree-settings label{display:flex;align-items:center;gap:8px;font-size:.78rem;font-weight:700;cursor:pointer;}
+.kitchen-handsfree-settings label span{display:flex;align-items:center;gap:7px;}
+.kitchen-handsfree-settings input{width:17px;height:17px;accent-color:#8d6240;}
+.kitchen-handsfree-note{font-size:.7rem;line-height:1.6;color:#766e63;margin:12px 0 0;}
+.kitchen-handsfree-status{font-size:.75rem;line-height:1.5;color:#4c684c;background:#edf2e7;border-radius:5px;padding:8px 10px;margin:8px 0 0;}
+.kitchen-handsfree-due{display:flex;align-items:center;gap:9px;background:#fff0df;border:1px solid #bf875d;color:#923d1f;font-size:.8rem;line-height:1.5;font-weight:750;padding:10px;margin:12px 0 0;border-radius:6px;overflow-wrap:anywhere;}
+.kitchen-handsfree-due svg{flex-shrink:0;}
+@media(max-width:590px){.kitchen-handsfree{padding:15px 12px;}.kitchen-handsfree-actions button{flex:1 1 40%;}.kitchen-handsfree-heading{align-items:start;}.kitchen-handsfree-heading h2{font-size:1.22rem;}}
+@media(prefers-reduced-motion:reduce){.kitchen-handsfree *{transition:none!important;animation:none!important;}}
