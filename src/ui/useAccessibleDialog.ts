@@ -23,11 +23,25 @@ export function useAccessibleDialog<T extends HTMLElement>(
   callbackRef.current = onDismiss;
   const blockedRef = useRef(options.busy === true);
   blockedRef.current = options.busy === true;
+  // React's autoFocus commits before modal effects: record the prior focus
+  // while a reusable sheet is still inactive, not after its first input mounts.
+  const preOpenFocus = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (active) return;
+    const remember = () => {
+      if (document.activeElement instanceof HTMLElement)
+        preOpenFocus.current = document.activeElement;
+    };
+    remember();
+    document.addEventListener('focusin', remember);
+    return () => document.removeEventListener('focusin', remember);
+  }, [active]);
   useEffect(() => {
     if (!active) return;
     const dialog = elementRef.current;
     if (!dialog) return;
-    const prior = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const prior = preOpenFocus.current ??
+      (document.activeElement instanceof HTMLElement ? document.activeElement : null);
     if (options.focusOnMount !== false) {
       const preferred = options.initialFocus
         ? dialog.querySelector<HTMLElement>(options.initialFocus)
