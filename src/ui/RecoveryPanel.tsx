@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { CircleAlert, Download, RefreshCw, Upload, X } from 'lucide-react';
 import { inspectBackupText, MAX_BACKUP_BYTES, type BackupImportPreview } from '../recovery/backup-import.ts';
+import { useAccessibleDialog } from './useAccessibleDialog.ts';
 import type {
   CollectionConflictRecord, ConflictRecord, RecipeLocalDb,
   CollectionOutboxMutation, OutboxMutation,
@@ -46,6 +47,7 @@ export function RecoveryPanel({
   const [data, setData] = useState<ReviewData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const dialogRef=useAccessibleDialog<HTMLElement>(true,onClose,{busy,initialFocus:'button[aria-label="Close recovery"]'});
   const [confirm, setConfirm] = useState<Selection>(null);
   const [backupPreview, setBackupPreview] = useState<BackupImportPreview | null>(null);
   const [restoreResult, setRestoreResult] = useState<string | null>(null);
@@ -166,6 +168,7 @@ export function RecoveryPanel({
   return (
     <div className="modal-layer" role="presentation">
       <section className="sheet recovery-sheet" role="dialog" aria-modal="true"
+        ref={dialogRef} tabIndex={-1}
         aria-labelledby="recovery-title" aria-describedby="recovery-description">
         <header className="sheet-header">
           <div>

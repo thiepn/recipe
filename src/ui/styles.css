@@ -3654,3 +3654,19 @@ body {
 @media(max-width:810px){.cooking-ideas-settings{grid-template-columns:repeat(2,minmax(0,1fr));}.cooking-ideas-hidden-form{grid-column:1/-1;}}
 @media(max-width:590px){.cooking-ideas-settings{grid-template-columns:minmax(0,1fr);}.cooking-ideas-hidden-form{grid-column:auto;}.cooking-idea{grid-template-columns:25px minmax(0,1fr);gap:10px;}.cooking-idea>button{grid-column:2;justify-self:start;}.cooking-ideas-toggle{width:100%;justify-content:space-between;}.cooking-ideas-plan button{width:100%;}}
 @media(prefers-reduced-motion:reduce){.cooking-intelligence *{transition:none!important;animation:none!important;scroll-behavior:auto!important;}}
+
+
+/* P20: 400%-zoom reflow, focus visibility, and reduced-motion custody */
+.sheet[tabindex="-1"]:focus-visible,.recipe-studio[tabindex="-1"]:focus-visible{outline:3px solid #a46640;outline-offset:-3px;}
+@media(max-width:460px){
+ .sheet,.import-sheet,.recovery-sheet,.compact-sheet,.add-sheet{width:100%;max-width:100%;min-width:0;}
+ .sheet .sheet-header,.sheet .inline-entry,.sheet .recovery-actions{flex-wrap:wrap;}
+ .sheet input,.sheet textarea,.sheet select,.recipe-studio input,.recipe-studio textarea{min-width:0;max-width:100%;}
+ .sheet .inline-entry>*{max-width:100%;min-width:0;}
+ .household-sheet,.kitchen-session,.kitchen-handsfree,.meal-planner,.recipe-studio,.cooking-intelligence{max-width:100%;min-width:0;}
+ .cooking-ideas-settings,.studio-layout,.planner-layout,.kitchen-layout{grid-template-columns:minmax(0,1fr);}
+ .studio-outline{max-width:100%;overscroll-behavior-x:contain;}
+}
+@media(prefers-reduced-motion:reduce){
+ .modal-layer *,.household-sheet *,.kitchen-session *,.recipe-studio *,.recovery-sheet *{scroll-behavior:auto!important;animation:none!important;transition:none!important;}
+}
