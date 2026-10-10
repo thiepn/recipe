@@ -57,3 +57,40 @@ test('two timers expire individually with explicit visual fallback',async({page}
   await page.getByRole('button',{name:'Dismiss demo timers'}).click();
   await expect(page.getByRole('alert')).toHaveCount(0);
 });
+
+
+test('denied notification permission keeps foreground timer alerts working',async({page})=>{
+  await page.addInitScript(()=>{
+    class DeniedNotification {
+      static permission='denied';
+      static async requestPermission(){return 'denied';}
+      constructor(){throw new Error('No notification should be shown when denied');}
+    }
+    Object.defineProperty(window,'Notification',{configurable:true,value:DeniedNotification});
+  });
+  await page.goto(fixture);
+  await page.getByRole('button',{name:'Enable system notifications'}).click();
+  await expect(page.getByText(/Notifications not permitted/)).toBeVisible();
+  await page.getByRole('button',{name:'Start demo timer'}).click();
+  await expect(page.getByRole('alert')).toContainText('Quick timer',{timeout:7000});
+});
+
+test('speech microphone permission refusal leaves safe manual navigation',async({page})=>{
+  await page.addInitScript(()=>{
+    class DeniedRecognition {
+      lang='';continuous=false;interimResults=false;
+      onresult:null=null;
+      onerror:((e:{error:string})=>void)|null=null;
+      onend:(()=>void)|null=null;
+      start(){queueMicrotask(()=>this.onerror?.({error:'not-allowed'}));}
+      stop(){this.onend?.();}
+      abort(){this.onend?.();}
+    }
+    (window as unknown as {SpeechRecognition:unknown}).SpeechRecognition=DeniedRecognition;
+  });
+  await page.goto(fixture);
+  await page.getByRole('button',{name:'Listen for one command'}).click();
+  await expect(page.getByText(/Microphone access was blocked/)).toBeVisible();
+  await page.getByRole('button',{name:'Next step'}).click();
+  await expect(page.getByTestId('fixture-step')).toHaveText('Step 2');
+});
