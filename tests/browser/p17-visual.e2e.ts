@@ -39,7 +39,7 @@ test('editor outline, weekly shopping focus and cooking focus mode preserve core
   await page.getByRole('link',{name:/Ingredients 1/}).click();
   await expect(page.locator('#studio-section-ingredients')).toBeVisible();
   await page.getByRole('button',{name:'Back to recipe'}).click();
-  await page.getByRole('navigation',{name:'Synthetic test surfaces'}).getByRole('button',{name:'cook'}).click();
+  await page.getByRole('navigation',{name:'Synthetic test surfaces'}).getByRole('button',{name:'cook',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Hands-free cooking'})).toBeVisible();
   await page.getByRole('button',{name:'Focus on steps'}).click();
   await expect(page.getByRole('button',{name:'Show ingredients'})).toHaveAttribute('aria-pressed','true');
