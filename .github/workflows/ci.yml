@@ -15,7 +15,7 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -23,4 +23,16 @@ jobs:
         with:
           node-version: '24'
       - run: pnpm install --no-frozen-lockfile
-      - run: pnpm verify
+      - name: Typecheck, Vitest, build and built-site smoke
+        run: pnpm verify
+      - name: Install Chromium for browser acceptance tests
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Browser acceptance — desktop and mobile viewport
+        run: pnpm test:browser
+      - name: Preserve failing browser evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: recipe-playwright-results
+          path: test-results/
+          if-no-files-found: ignore
