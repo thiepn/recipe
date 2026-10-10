@@ -34,11 +34,11 @@ test('rejects malformed invitations and preserves keyboard boundaries at narrow 
  await expect(dlg.getByText('Draft prepared — not sent')).toHaveCount(0);
  await dlg.getByLabel('Email address').fill('good@example.com');
  await dlg.getByRole('button',{name:'Review invitation draft'}).click();
- await expect(dlg.getByRole('status')).toContainText('Draft prepared');
+ await expect(dlg.locator('.household-preview')).toContainText('Draft prepared');
  await page.keyboard.press('Shift+Tab');
  expect(await dlg.evaluate(el=>el.contains(document.activeElement))).toBe(true);
  const dims=await page.evaluate(()=>[document.documentElement.scrollWidth,document.documentElement.clientWidth]);
- expect(dims[0]).toBeLessThanOrEqual(dims[1]+1);
+ expect(dims[0]!).toBeLessThanOrEqual(dims[1]!+1);
 });
 test('reduced motion and 200% zoom preserve visible denial without horizontal overflow',async({page},testInfo)=>{
  await page.emulateMedia({reducedMotion:'reduce'});
@@ -48,6 +48,6 @@ test('reduced motion and 200% zoom preserve visible denial without horizontal ov
  const dlg=page.getByRole('dialog',{name:'Family sharing'});
  await expect(dlg.getByText(/Nothing prepared here is sent/)).toBeVisible();
  const dims=await page.evaluate(()=>[document.documentElement.scrollWidth,document.documentElement.clientWidth]);
- expect(dims[0]).toBeLessThanOrEqual(dims[1]+1);
+ expect(dims[0]!).toBeLessThanOrEqual(dims[1]!+1);
  await page.screenshot({path:'test-results/p18-'+testInfo.project.name+'-zoom200.png',fullPage:true});
 });
