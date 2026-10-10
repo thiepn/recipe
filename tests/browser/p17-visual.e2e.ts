@@ -38,6 +38,7 @@ test('editor outline, weekly shopping focus and cooking focus mode preserve core
   await expect(page.getByRole('navigation',{name:'Jump to editor section'})).toBeVisible();
   await page.getByRole('link',{name:/Ingredients 1/}).click();
   await expect(page.locator('#studio-section-ingredients')).toBeVisible();
+  await page.getByRole('button',{name:'Back to recipe'}).click();
   await page.getByRole('navigation',{name:'Synthetic test surfaces'}).getByRole('button',{name:'cook'}).click();
   await expect(page.getByRole('heading',{name:'Hands-free cooking'})).toBeVisible();
   await page.getByRole('button',{name:'Focus on steps'}).click();
