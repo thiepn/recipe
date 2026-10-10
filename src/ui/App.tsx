@@ -398,7 +398,6 @@ export function AddSheet({
               value={title}
               onChange={(event) => setTitle(event.target.value)}
               placeholder="e.g. Mom's kimchi jjigae"
-              autoFocus
             />
             <button
               className="button button-primary"
