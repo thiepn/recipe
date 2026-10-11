@@ -1,0 +1,192 @@
+name: THIEPN owner-gated Vercel release
+
+# Intentionally no push, pull_request, or schedule trigger.
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: "Stage a production build without domain assignment, or promote a previously verified stage"
+        required: true
+        type: choice
+        options:
+          - stage
+          - promote
+      release_sha:
+        description: "Exact full 40-character SHA of current main"
+        required: true
+        type: string
+      deployment_url:
+        description: "For promote only: exact staged *.vercel.app URL"
+        required: false
+        type: string
+      confirmation:
+        description: "Type STAGE <sha> or PROMOTE <sha> exactly"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: thiepn-vercel-release
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.guard.outputs.sha }}
+    steps:
+      - name: Reject unapproved, stale, or non-owner dispatch
+        id: guard
+        env:
+          ACTOR: ${{ github.actor }}
+          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+          SOURCE_REF: ${{ github.ref }}
+          EXPECTED_SHA: ${{ inputs.release_sha }}
+          OPERATION: ${{ inputs.operation }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          RELEASE_ENABLED: ${{ vars.THIEPN_RELEASES_ENABLED }}
+          CLI_VERSION: ${{ vars.VERCEL_CLI_VERSION }}
+        run: |
+          set -euo pipefail
+          test "$ACTOR" = "thiepn"
+          test "$TRIGGERING_ACTOR" = "thiepn"
+          test "$GITHUB_RUN_ATTEMPT" = "1"
+          test "$SOURCE_REF" = "refs/heads/main"
+          test "$RELEASE_ENABLED" = "true"
+          [[ "$CLI_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$EXPECTED_SHA" = "$GITHUB_SHA"
+          case "$OPERATION" in
+            stage) test "$CONFIRMATION" = "STAGE $EXPECTED_SHA" ;;
+            promote) test "$CONFIRMATION" = "PROMOTE $EXPECTED_SHA" ;;
+            *) exit 1 ;;
+          esac
+          echo "sha=$EXPECTED_SHA" >> "$GITHUB_OUTPUT"
+
+  stage:
+    if: inputs.operation == 'stage'
+    needs: preflight
+    runs-on: ubuntu-latest
+    environment: thiepn-vercel-production
+    timeout-minutes: 30
+    env:
+      RELEASE_SHA: ${{ needs.preflight.outputs.sha }}
+      VERCEL_ORG_ID: "team_LVo30en2fIX29vZH3gnYxmoi"
+      VERCEL_PROJECT_ID: "prj_u5xuNXb2ekkgnuajBKfg98kVWJB8"
+      VERCEL_CLI_VERSION: ${{ vars.VERCEL_CLI_VERSION }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          ref: ${{ needs.preflight.outputs.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24'
+      - name: Check exact source and project scope
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+          test "$VERCEL_ORG_ID" = "team_LVo30en2fIX29vZH3gnYxmoi"
+          test "$VERCEL_PROJECT_ID" = "prj_u5xuNXb2ekkgnuajBKfg98kVWJB8"
+      - name: Install pinned CLI without deployment token
+        run: npm install --global "vercel@$VERCEL_CLI_VERSION"
+      - name: Pull scoped production environment
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          vercel pull --yes --environment=production
+      - name: Build production candidate without deployment token
+        run: vercel build --prod
+      - name: Verify current main has not advanced
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          const response = await fetch("https://api.github.com/repos/" + process.env.GITHUB_REPOSITORY + "/git/ref/heads/main", {
+            headers: { Authorization: "Bearer " + process.env.GH_TOKEN, Accept: "application/vnd.github+json" },
+            redirect: "error"
+          });
+          if (!response.ok) throw new Error("Could not verify current main HEAD: HTTP " + response.status);
+          if ((await response.json()).object?.sha !== process.env.RELEASE_SHA)
+            throw new Error("Refusing stale release: main advanced since dispatch");
+          NODE
+      - name: Stage only — never assign a live domain
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          DEPLOYMENT_URL="$(vercel deploy --prebuilt --prod --skip-domain --meta "thiepnReleaseSha=$RELEASE_SHA")"
+          DEPLOYMENT_URL="$DEPLOYMENT_URL" node --input-type=module -e '
+            const u = new URL(process.env.DEPLOYMENT_URL);
+            if (u.protocol !== "https:" || !u.hostname.endsWith(".vercel.app") || u.pathname !== "/" || u.search) process.exit(1);
+          '
+          echo "STAGED ONLY: $DEPLOYMENT_URL"
+          echo "SOURCE SHA: $RELEASE_SHA"
+          echo "Production domains are not assigned by this job."
+
+  promote:
+    if: inputs.operation == 'promote'
+    needs: preflight
+    runs-on: ubuntu-latest
+    environment: thiepn-vercel-production
+    timeout-minutes: 15
+    env:
+      RELEASE_SHA: ${{ needs.preflight.outputs.sha }}
+      DEPLOYMENT_URL: ${{ inputs.deployment_url }}
+      VERCEL_ORG_ID: "team_LVo30en2fIX29vZH3gnYxmoi"
+      VERCEL_PROJECT_ID: "prj_u5xuNXb2ekkgnuajBKfg98kVWJB8"
+      VERCEL_CLI_VERSION: ${{ vars.VERCEL_CLI_VERSION }}
+    steps:
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - name: Verify current main has not advanced
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          const response = await fetch("https://api.github.com/repos/" + process.env.GITHUB_REPOSITORY + "/git/ref/heads/main", {
+            headers: { Authorization: "Bearer " + process.env.GH_TOKEN, Accept: "application/vnd.github+json" },
+            redirect: "error"
+          });
+          if (!response.ok) throw new Error("Could not verify current main HEAD: HTTP " + response.status);
+          if ((await response.json()).object?.sha !== process.env.RELEASE_SHA)
+            throw new Error("Refusing stale release: main advanced since dispatch");
+          NODE
+      - name: Verify exact staged deployment is owned by this project
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          node --input-type=module <<'NODE'
+          const fail = message => { throw new Error(message); };
+          const raw = process.env.DEPLOYMENT_URL || "";
+          let url;
+          try { url = new URL(raw); } catch { fail("Invalid deployment URL"); }
+          if (url.protocol !== "https:" || !url.hostname.endsWith(".vercel.app") ||
+              url.pathname !== "/" || url.search || url.hash || url.username || url.password) fail("Invalid deployment host");
+          const endpoint = new URL("https://api.vercel.com/v13/deployments/" + encodeURIComponent(url.hostname));
+          endpoint.searchParams.set("teamId", process.env.VERCEL_ORG_ID);
+          const response = await fetch(endpoint, {headers: {Authorization: "Bearer " + process.env.VERCEL_TOKEN}});
+          if (!response.ok) fail("Could not verify Vercel deployment: HTTP " + response.status);
+          const d = await response.json();
+          if (d.projectId !== process.env.VERCEL_PROJECT_ID) fail("Wrong Vercel project");
+          if (d.target !== "production" || (d.readyState !== "READY" && d.state !== "READY")) fail("Deployment is not production-ready");
+          if (d.meta?.thiepnReleaseSha !== process.env.RELEASE_SHA) fail("Release SHA metadata mismatch");
+          if (d.url !== url.hostname) fail("Deployment URL mismatch");
+          console.log("Verified staged project, readiness, source SHA and exact URL.");
+          NODE
+      - name: Promote only the verified staged deployment
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          npm install --global "vercel@$VERCEL_CLI_VERSION"
+          vercel promote "$DEPLOYMENT_URL" --scope "$VERCEL_ORG_ID"

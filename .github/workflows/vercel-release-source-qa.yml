@@ -1,0 +1,31 @@
+name: THIEPN release policy source QA
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  source-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Install integrity-pinned actionlint 1.7.12 and check both workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error --retry 2 --output /tmp/thiepn-actionlint.tgz \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  /tmp/thiepn-actionlint.tgz" | sha256sum --check
+          mkdir -p /tmp/thiepn-actionlint
+          tar -xzf /tmp/thiepn-actionlint.tgz -C /tmp/thiepn-actionlint actionlint
+          /tmp/thiepn-actionlint/actionlint .github/workflows/vercel-release.yml .github/workflows/vercel-release-source-qa.yml
+      - name: Exercise authorization preflight (no secrets, no deployment)
+        run: python3 scripts/verify-vercel-release.py prj_u5xuNXb2ekkgnuajBKfg98kVWJB8
